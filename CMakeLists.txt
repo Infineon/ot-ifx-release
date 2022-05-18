@@ -48,12 +48,12 @@ option(VERBOSE "Enable verbose message" OFF)
 
 # Add platform specific crypto files to openthread stack SDK
 file(
-        GLOB
-            PLATFORM_CRYPTO_SETTING
-        LIST_DIRECTORIES
-            false
-        ${PROJECT_SOURCE_DIR}/src/${IFX_PLATFORM}/crypto.cmake
-    )
+    GLOB
+        PLATFORM_CRYPTO_SETTING
+    LIST_DIRECTORIES
+        false
+    ${PROJECT_SOURCE_DIR}/src/${IFX_PLATFORM}/crypto.cmake
+)
 
 list(LENGTH PLATFORM_CRYPTO_SETTING PLATFORM_CRYPTO_FILE)
 
@@ -66,17 +66,17 @@ add_subdirectory(openthread)
 
 # Add compile option for openthread stack
 target_compile_definitions(
-                            ot-config
-                            INTERFACE
-                                OPENTHREAD_CONFIG_PLATFORM_ASSERT_MANAGEMENT
-                           )
+    ot-config
+    INTERFACE
+    OPENTHREAD_CONFIG_PLATFORM_ASSERT_MANAGEMENT
+)
 
 # Add include directory for openthread stack
 target_include_directories(
-                            ot-config
-                            INTERFACE
-                                src/${IFX_PLATFORM}
-                          )
+    ot-config
+    INTERFACE
+    src/${IFX_PLATFORM}
+)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wshadow")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wshadow -fno-exceptions")
@@ -94,29 +94,25 @@ set(OT_BUILD_EXECUTABLES OFF)
 include("${PROJECT_SOURCE_DIR}/third_party/infineon/platform/${IFX_PLATFORM}/${IFX_PLATFORM}.cmake")
 
 file(
-        GLOB
-            APP_SOURCES
-        LIST_DIRECTORIES
-            false
-        CONFIGURE_DEPENDS
+    GLOB
+        APP_SOURCES
+    LIST_DIRECTORIES
+        false
+    CONFIGURE_DEPENDS
         ${PROJECT_SOURCE_DIR}/openthread/examples/apps/cli/*.c
         ${PROJECT_SOURCE_DIR}/openthread/examples/apps/cli/*.cpp
-    )
+)
 
-set(
-        APP_INC_DIRS
-        ${PROJECT_SOURCE_DIR}/openthread/examples/platforms
-   )
+set(APP_INC_DIRS ${PROJECT_SOURCE_DIR}/openthread/examples/platforms)
 
 if(OT_FTD)
-    set(
-            APP_LINK_LIBS
-            openthread-cli-ftd
-            openthread-ftd
-            ${OT_PLATFORM_LIB_FTD}
-            ${OT_MBEDTLS}
-            ot-config
-       )
+    set(APP_LINK_LIBS
+        openthread-cli-ftd
+        openthread-ftd
+        ${OT_PLATFORM_LIB_FTD}
+        ${OT_MBEDTLS}
+        ot-config
+    )
 
     add_example_target(infineon-ot-cli-ftd
                        "${APP_SOURCES}"
@@ -125,14 +121,13 @@ if(OT_FTD)
 endif()
 
 if(OT_MTD)
-    set(
-            APP_LINK_LIBS
-            openthread-cli-mtd
-            openthread-mtd
-            ${OT_PLATFORM_LIB_MTD}
-            ${OT_MBEDTLS}
-            ot-config
-       )
+    set(APP_LINK_LIBS
+        openthread-cli-mtd
+        openthread-mtd
+        ${OT_PLATFORM_LIB_MTD}
+        ${OT_MBEDTLS}
+        ot-config
+    )
 
     add_example_target(infineon-ot-cli-mtd
                        "${APP_SOURCES}"

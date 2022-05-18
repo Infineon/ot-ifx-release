@@ -28,36 +28,39 @@
 
 /**
  * @file
- *   This file implements an entropy source based on TRNG.
- *
+ *   This file includes definitions for performing AES by platform
  */
 
-#include <openthread/platform/entropy.h>
+#ifndef MBEDTLS_AES_ALT_H
+#define MBEDTLS_AES_ALT_H
 
-#include <stdio.h>
-#include <wiced_platform.h>
+// Regular implementation
+//
 
-#ifndef ENTROPY_DEBUG
-#define ENTROPY_DEBUG 0
-#endif // ENTROPY_DEBUG
+/**
+ * \brief The AES context-type definition.
+ */
+#define N_ROW 4
+#define N_COL 4
+#define N_BLOCK (N_ROW * N_COL)
+#define N_MAX_ROUNDS 14
 
-#if (ENTROPY_DEBUG != 0)
-#define ENTROPY_TRACE(format, ...) printf(format, ##__VA_ARGS__)
-#else
-#define ENTROPY_TRACE(...)
-#endif
-
-otError otPlatEntropyGet(uint8_t *aOutput, uint16_t aOutputLength)
+typedef struct
 {
-    ENTROPY_TRACE("%s (%p, %d)\n", __FUNCTION__, aOutput, aOutputLength);
+    uint8_t ksch[(N_MAX_ROUNDS + 1) * N_BLOCK];
+    uint8_t rnd;
+} platform_aes_context;
 
-    switch (wiced_platform_entropy_get(aOutput, aOutputLength))
-    {
-    case WICED_BADARG:
-        return OT_ERROR_INVALID_ARGS;
-    case WICED_SUCCESS:
-        return OT_ERROR_NONE;
-    default:
-        return OT_ERROR_FAILED;
-    }
-}
+typedef struct mbedtls_aes_context
+{
+    platform_aes_context aes_enc_ctx[1];
+    platform_aes_context aes_dec_ctx[1];
+} mbedtls_aes_context;
+
+uint8_t smp_aes_set_key(const unsigned char key[], uint8_t keylen, platform_aes_context ctx[1]);
+
+uint8_t smp_aes_encrypt(const unsigned char in[N_BLOCK], unsigned char out[N_BLOCK], const platform_aes_context ctx[1]);
+
+uint8_t smp_aes_decrypt(const unsigned char in[N_BLOCK], unsigned char out[N_BLOCK], const platform_aes_context ctx[1]);
+
+#endif /* MBEDTLS_AES_ALT_H */

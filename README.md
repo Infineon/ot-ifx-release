@@ -36,8 +36,7 @@ In a Bash terminal, follow these instructions to install the GNU toolchain and o
 
 ```bash
 $ cd <path-to-ot-ifx>
-$ git submodule init
-$ git submodule update
+$ git submodule update --init
 $ ./script/bootstrap
 ```
 

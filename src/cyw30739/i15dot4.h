@@ -1,35 +1,31 @@
 /*
- * Copyright 2016-2021, Cypress Semiconductor Corporation (an Infineon company) or
- * an affiliate of Cypress Semiconductor Corporation.  All rights reserved.
+ *  Copyright (c) 2021, The OpenThread Authors.
+ *  All rights reserved.
  *
- * This software, including source code, documentation and related
- * materials ("Software") is owned by Cypress Semiconductor Corporation
- * or one of its affiliates ("Cypress") and is protected by and subject to
- * worldwide patent protection (United States and foreign),
- * United States copyright laws and international treaty provisions.
- * Therefore, you may use this Software only as provided in the license
- * agreement accompanying the software package from which you
- * obtained this Software ("EULA").
- * If no EULA applies, Cypress hereby grants you a personal, non-exclusive,
- * non-transferable license to copy, modify, and compile the Software
- * source code solely for use in connection with Cypress's
- * integrated circuit products.  Any reproduction, modification, translation,
- * compilation, or representation of this Software except as specified
- * above is prohibited without the express written permission of Cypress.
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted provided that the following conditions are met:
+ *  1. Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *  2. Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer in the
+ *     documentation and/or other materials provided with the distribution.
+ *  3. Neither the name of the copyright holder nor the
+ *     names of its contributors may be used to endorse or promote products
+ *     derived from this software without specific prior written permission.
  *
- * Disclaimer: THIS SOFTWARE IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, NONINFRINGEMENT, IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Cypress
- * reserves the right to make changes to the Software without notice. Cypress
- * does not assume any liability arising out of the application or use of the
- * Software or any product or circuit described in the Software. Cypress does
- * not authorize its products for use in any products where a malfunction or
- * failure of the Cypress product may reasonably be expected to result in
- * significant property damage, injury or death ("High Risk Product"). By
- * including Cypress's product in a High Risk Product, the manufacturer
- * of such system or application assumes all risk of such use and in doing
- * so agrees to indemnify Cypress against all liability.
+ *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ *  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ *  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ *  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ *  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ *  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ *  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *  POSSIBILITY OF SUCH DAMAGE.
  */
+
 /**
  * @file
  *   This file defines the related parameters used for i15dot4 MAC operation
@@ -41,6 +37,10 @@
 #include <stdint.h>
 
 #include "i15dot4_types.h"
+
+#ifndef I15DOT4_VARAIABLE_ACK_LENGTH
+#define I15DOT4_VARAIABLE_ACK_LENGTH 1
+#endif // I15DOT4_VARAIABLE_ACK_LENGTH
 
 typedef enum _CONTEXT_ID_t
 {
@@ -61,13 +61,20 @@ typedef enum
 {
     ADDR_MATCH_DISABLE         = 0,
     ADDR_MATCH_ENABLE          = 1,
-    ADDR_MATCH_SHORT_ADD       = 2,
-    ADDR_MATCH_EXT_ADD         = 3,
-    ADDR_MATCH_SHORT_CLEAR     = 4,
-    ADDR_MATCH_SHORT_CLEAR_ALL = 5,
-    ADDR_MATCH_EXT_CLEAR       = 6,
-    ADDR_MATCH_EXT_CLEAR_ALL   = 7,
+    ADDR_MATCH_ADD             = 2,
+    ADDR_MATCH_CLEAR           = 3,
+    ADDR_MATCH_CLEAR_ALL       = 4,
+    ADDR_MATCH_SET_KEY         = 5,
+    ADDR_MATCH_SET_KEY_ID_MODE = 6,
+    ADDR_MATCH_SET_KEY_INDEX   = 7,
 } ADDR_MATCH_ACTION_t;
+
+typedef enum
+{
+    I15DOT4_ADDR_MATCH_FLAG_FRAME_PENDING = 0x01,
+    I15DOT4_ADDR_MATCH_FLAG_VENDOR_IE     = 0x02,
+    I15DOT4_ADDR_MATCH_FLAG_EXT_ADDR_MODE = 0x80,
+} ADDR_MATCH_TYPE_t;
 
 /* MLME/MCPS status */
 typedef enum
@@ -147,7 +154,11 @@ enum
     I15DOT4_MAX_MAC_PAYLOAD_SIZE        = I15DOT4_MAX_PHY_PACKET_SIZE - I15DOT4_MIN_MPDU_OVERHEAD,
     I15DOT4_MAX_BEACON_PAYLOAD_LENGTH   = I15DOT4_MAX_PHY_PACKET_SIZE - I15DOT4_MAX_BEACON_OVERHEAD,
     I15DOT4_FCS_LENGTH                  = 2,
-    I15DOT4_ACK_LENGTH                  = 3,
+#if I15DOT4_VARAIABLE_ACK_LENGTH
+    I15DOT4_ACK_LENGTH = I15DOT4_MAX_PHY_PACKET_SIZE,
+#else
+    I15DOT4_ACK_LENGTH = 3,
+#endif
 };
 
 /* Command/Event ID */
@@ -1017,21 +1028,32 @@ typedef struct __attribute__((packed)) _I15DOT4_THREAD_DATA_REQ
     uint8_t  max_frame_retries;
     uint8_t  csma_ca_enabled : 1;
     uint8_t  csl_present : 1;
-    uint8_t  is_security_processed : 1;
+    uint8_t  security_enable : 1;
     uint8_t  reserved : 5;
+    uint8_t  key_id_mode;
+    uint8_t  key_index;
+    uint8_t  sec_hdr_offset;
+    uint8_t  sec_hdr_len;
+    uint8_t  payload_offset;
+    uint8_t  payload_len;
     uint8_t  psdu_length;
     uint8_t  psdu[I15DOT4_MAX_PHY_PACKET_SIZE - I15DOT4_FCS_LENGTH];
 } I15DOT4_THREAD_DATA_REQ_t;
 
 typedef struct __attribute__((packed)) _I15DOT4_THREAD_DATA_CONF
 {
-    uint8_t  context_id;
-    uint8_t  cmd_id;
-    uint8_t  handle;
-    uint8_t  status;
-    uint8_t  reserved;
+    uint8_t context_id;
+    uint8_t cmd_id;
+    uint8_t handle;
+    uint8_t status;
+#if !I15DOT4_VARAIABLE_ACK_LENGTH
+    uint8_t reserved;
+#endif
     uint32_t time_stamp;
-    uint8_t  ack_frame[I15DOT4_ACK_LENGTH];
+#if I15DOT4_VARAIABLE_ACK_LENGTH
+    uint8_t ack_frame_length;
+#endif
+    uint8_t ack_frame[I15DOT4_ACK_LENGTH];
 } I15DOT4_THREAD_DATA_CONF_t;
 
 typedef struct __attribute__((packed)) _I15DOT4_THREAD_DATA_IND
@@ -1052,6 +1074,9 @@ typedef struct __attribute__((packed)) _I15DOT4_THREAD_ADDR_MATCH_REQ
     uint8_t        cmd_id;
     uint8_t        action;
     I15DOT4_ADDR_t addr;
+    uint8_t        flag; // refer to ADDR_MATCH_TYPE_t
+    uint8_t        buf_len;
+    uint8_t        buf[16];
 } I15DOT4_THREAD_ADDR_MATCH_REQ_t;
 
 typedef struct __attribute__((packed)) _I15DOT4_THREAD_ADDR_MATCH_CONF
