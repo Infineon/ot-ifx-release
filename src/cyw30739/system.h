@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2021, The OpenThread Authors.
+ *  Copyright (c) 2022, The OpenThread Authors.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -28,63 +28,43 @@
 
 /**
  * @file
- *   This file includes definitions for performing AES-CCM computations.
+ *   This file defines Infineon specific system APIs.
  */
 
-#ifndef AES_CCM_ALT_HPP_
-#define AES_CCM_ALT_HPP_
+#pragma once
 
-#include <stdint.h>
-#include "crypto/aes_ccm.hpp"
-#include "mbedtls/ccm.h"
+#include <wiced.h>
 
 /**
- * @addtogroup core-security
- *
- * @{
- *
+ * \brief prototype for system event handler
  */
+typedef void(system_event_handler_t)(void);
 
 /**
- * This class implements AES CCM computation.
+ *  \brief Get system event code and the register the corresponding event handler if
+ *         provided.
+ *
+ *  \param [out]    allocated event code
+ *  \param [in]     user specified event handler
+ *
+ *  \return WICED_TRUE  : Success
+ *          WICED_FALSE : Fail.
  *
  */
-enum
-{
-    kMinTagLength = 4,  ///< Minimum tag length (in bytes).
-    kNonceSize    = 13, ///< Size of IEEE 802.15.4 Nonce (in bytes).
-};
+wiced_bool_t system_event_register(uint32_t *p_event_code, system_event_handler_t *p_event_handler);
 
 /**
- * This enumeration type represent the encryption vs decryption mode.
+ *  \brief Wait a system event
+ *
+ *  \param [in] event code (get by register utility)
  *
  */
-enum Mode
-{
-    kEncrypt, // Encryption mode.
-    kDecrypt, // Decryption mode.
-};
+void system_event_wait(uint32_t event_code);
 
 /**
- * This structure type represent the context that platform-ccm needs.
+ *  \brief Set a system event
+ *
+ *  \param [in] event code (get by register utility)
  *
  */
-typedef struct
-{
-    mbedtls_ccm_context                   mMbed_ccm_ctx;
-    uint32_t                              mInputTextLength;
-    uint8_t                               mNonceLength;
-    uint8_t                              *mNoncePtr;
-    uint8_t                               mAadLength;
-    uint8_t                              *mAadPtr;
-    uint8_t                               mAadCurLength;
-    uint8_t                               mTagLength;
-    uint32_t                              mTag[4];
-    ot::Crypto::AesCcm::aesccm_context_t *mOriginal_ctx;
-} platform_ccm_ctx_t;
-
-/**
- * @}
- *
- */
-#endif // AES_CCM_ALT_HPP_
+void system_event_set(uint32_t event_code);
