@@ -185,7 +185,7 @@ sub post_process_cgs
     }
 
     # for now just need to split TCA records from patch.cgs to end of combined cgs
-    return if $cgs_record->{file} !~ /(20721B2|20719B2|30739A0)/;
+    return if $cgs_record->{file} !~ /(20721B2|20719B2|30739A0|30739B2)/;
     @lines = ();
     push @lines, @{$cgs_record->{lines}};
     $cgs_record->{lines} = [];

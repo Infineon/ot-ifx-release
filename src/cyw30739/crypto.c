@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2021, The OpenThread Authors.
+ *  Copyright (c) 2023, The OpenThread Authors.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -28,63 +28,42 @@
 
 /**
  * @file
- *   This file includes definitions for performing AES-CCM computations.
+ *   This file implements platform specific cryptography wrapper functions.
  */
 
-#ifndef AES_CCM_ALT_HPP_
-#define AES_CCM_ALT_HPP_
+#include <wiced_hal_platform.h>
+#include <openthread/platform/crypto.h>
 
-#include <stdint.h>
-#include "crypto/aes_ccm.hpp"
-#include "mbedtls/ccm.h"
+#ifndef CRYPTO_DEBUG
+#define CRYPTO_DEBUG 0
+#endif // CRYPTO_DEBUG
 
-/**
- * @addtogroup core-security
- *
- * @{
- *
- */
+#if (CRYPTO_DEBUG != 0)
+#define CRYPTO_TRACE(format, ...) printf(format, ##__VA_ARGS__)
+#else
+#define CRYPTO_TRACE(...)
+#endif
 
-/**
- * This class implements AES CCM computation.
- *
- */
-enum
+void otPlatCryptoSystemInit(void)
 {
-    kMinTagLength = 4,  ///< Minimum tag length (in bytes).
-    kNonceSize    = 13, ///< Size of IEEE 802.15.4 Nonce (in bytes).
-};
+    // This function is called to make this object to be linked.
+}
 
-/**
- * This enumeration type represent the encryption vs decryption mode.
- *
- */
-enum Mode
+void otPlatCryptoRandomInit(void) {}
+
+void otPlatCryptoRandomDeinit(void) {}
+
+otError otPlatCryptoRandomGet(uint8_t *aBuffer, uint16_t aSize)
 {
-    kEncrypt, // Encryption mode.
-    kDecrypt, // Decryption mode.
-};
-
-/**
- * This structure type represent the context that platform-ccm needs.
- *
- */
-typedef struct
-{
-    mbedtls_ccm_context                   mMbed_ccm_ctx;
-    uint32_t                              mInputTextLength;
-    uint8_t                               mNonceLength;
-    uint8_t                              *mNoncePtr;
-    uint8_t                               mAadLength;
-    uint8_t                              *mAadPtr;
-    uint8_t                               mAadCurLength;
-    uint8_t                               mTagLength;
-    uint32_t                              mTag[4];
-    ot::Crypto::AesCcm::aesccm_context_t *mOriginal_ctx;
-} platform_ccm_ctx_t;
-
-/**
- * @}
- *
- */
-#endif // AES_CCM_ALT_HPP_
+    switch (wiced_hal_platform_random_get(aBuffer, aSize, NULL))
+    {
+    case WICED_SUCCESS:
+        return OT_ERROR_NONE;
+    case WICED_BADARG:
+        return OT_ERROR_INVALID_ARGS;
+    case WICED_NOT_AVAILABLE:
+        return OT_ERROR_INVALID_STATE;
+    default:
+        return OT_ERROR_FAILED;
+    }
+}

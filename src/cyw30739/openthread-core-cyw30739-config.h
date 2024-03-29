@@ -56,6 +56,14 @@
 #define OPENTHREAD_CONFIG_PLATFORM_FLASH_API_ENABLE 0
 
 /**
+ * @def OPENTHREAD_CONFIG_PLATFORM_USEC_TIMER_ENABLE
+ *
+ * Define to 1 if you want to enable microsecond backoff timer implemented in platform.
+ *
+ */
+#define OPENTHREAD_CONFIG_PLATFORM_USEC_TIMER_ENABLE 1
+
+/**
  * @def OPENTHREAD_CONFIG_TCP_ENABLE
  *
  * Define as 1 to enable TCP.
@@ -104,5 +112,13 @@
  *
  */
 #define OPENTHREAD_CONFIG_MAC_CSL_REQUEST_AHEAD_US 5000
+
+/**
+ * @def OPENTHREAD_CONFIG_MLE_IP_ADDRS_PER_CHILD
+ *
+ * The maximum number of supported IPv6 address registrations per child.
+ *
+ */
+#define OPENTHREAD_CONFIG_MLE_IP_ADDRS_PER_CHILD 10
 
 #endif /* OPENTHREAD_CORE_CYW30739_CONFIG_H_ */

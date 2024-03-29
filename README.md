@@ -26,11 +26,34 @@ This repo contains example platform drivers for the [Infineon CYW30739][30739].
 
 The example platform drivers are intended to present the minimal code necessary to support OpenThread.
 
-## Toolchain
+## Toolchain and Dependencies
 
-Download and install the [GNU toolchain for ARM Cortex-M][gnu-toolchain].
+### [ModusToolbox™ Software](https://www.infineon.com/cms/en/design-support/tools/sdk/modustoolbox-software)
 
-[gnu-toolchain]: https://developer.arm.com/tools-and-software/open-source-software/developer-tools/gnu-toolchain/gnu-rm
+Follow the
+[Installation Guide](https://www.infineon.com/ModusToolboxInstallguide)
+to download and install the ModusToolbox Software.
+
+#### ModusToolbox™ tools package
+
+ModusToolbox™ tools package should be automatically installed in the default location if you followed the
+[Installation Guide](https://www.infineon.com/ModusToolboxInstallguide).
+Please refer to the Installation Guide for the default location for different operating systems.
+
+If you need to install the ModusToolbox™ tools package in a custom location,
+you must set the environment variable `CY_TOOLS_PATHS` to the
+`/path/to/ModusToolbox/tools_x.x` to specify the location of tools.
+
+```bash
+export CY_TOOLS_PATHS="/path/to/ModusToolbox/tools_x.x"
+```
+
+#### Note for WSL (Windows Subsystem for Linux)
+
+If you are using WSL, please ensure you have installed the ModusToolbox™ Software for Linux.
+Running Windows tools directly from the WSL command line would cause path resolution failure in the build process.
+
+### Other Dependencies
 
 In a Bash terminal, follow these instructions to install the GNU toolchain and other dependencies.
 

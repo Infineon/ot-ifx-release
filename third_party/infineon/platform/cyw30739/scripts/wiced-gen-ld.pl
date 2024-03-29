@@ -97,16 +97,6 @@ my $mem_lut = {
 		"mem_type" => "ram",
 		"pre" => [],
 		"post" => [],},
-	".text.mbedtls" => {
-		"sections" => [
-			"*libmbedcrypto.a:*(.text .text.*)",
-			"*libmbedtls.a:*(.text .text.*)",
-			"*libmbedx509.a:*(.text .text.*)",
-		],
-		"mem_type" => "ram",
-		"pre" => [],
-		"post" => [],
-	},
 	".rodata" => {
 		"sections" => [
 			"*(const_drom_var)",
@@ -495,8 +485,6 @@ sub output_ld
 		}
 		close $OVER;
 	}
-
-	output_section('.text.mbedtls', $mem_lut, $OUT);
 
 	# if objects are assigned to XIP, match their .text and .rodata
 	output_section('.app_xip_area', $mem_lut, $OUT) if defined $param->{xip};

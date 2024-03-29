@@ -34,15 +34,14 @@
 
 #include "system.h"
 
-#include <stdio.h>
-
+#include <mbedtls/platform.h>
 #include <openthread-system.h>
+#include <stdio.h>
 #ifndef CHIP_HAVE_CONFIG_H
 #include <openthread/tasklet.h>
 #endif
 
 #include <wiced_memory.h>
-#include <wiced_platform.h>
 #include <wiced_platform_memory.h>
 #include <wiced_rtos.h>
 
@@ -61,6 +60,7 @@
 #endif // BITS_PER_BYTE
 
 extern void otPlatAlramInit(void);
+extern void otPlatCryptoSystemInit(void);
 extern void otPlatRadioInit(void);
 extern void otPlatUartInit(void);
 
@@ -98,9 +98,11 @@ static void system_post_init(void)
 {
     printf("system_post_init\n");
 
+#if IFX_CLI_COMMAND
 #if !OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE
     ifx_ot_cli_cmd_install(otInstanceInitSingle());
 #endif // !OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE
+#endif // IFX_CLI_COMMAND
 
     printf("Free RAM sizes: %lu\n", wiced_memory_get_free_bytes());
 }
@@ -112,6 +114,10 @@ void otSysInit(int argc, char *argv[])
 
     OT_UNUSED_VARIABLE(argc);
     OT_UNUSED_VARIABLE(argv);
+
+#ifdef MBEDTLS_PLATFORM_SETUP_TEARDOWN_ALT
+    mbedtls_platform_setup(NULL);
+#endif
 
     /* Create system event flag handle. */
     system_cb.event.p_handle = wiced_rtos_create_event_flags();
@@ -132,6 +138,9 @@ void otSysInit(int argc, char *argv[])
 
     /* Initialize the Alarm Abstraction Layer. */
     otPlatAlramInit();
+
+    /* Initialize the Crypto Abstraction Layer. */
+    otPlatCryptoSystemInit();
 
     /* Initialize the Radio Abstraction Layer. */
     otPlatRadioInit();
@@ -177,7 +186,7 @@ void otSysProcessDrivers(otInstance *aInstance)
     system_event_dispatch();
 }
 
-OT_TOOL_WEAK void otSysEventSignalPending(void) {}
+__attribute__((section(".text_in_ram"))) OT_TOOL_WEAK void otSysEventSignalPending(void) {}
 
 /**
  *  \brief Get system event code and the register the corresponding event handler if
@@ -238,7 +247,7 @@ wiced_bool_t system_event_register(uint32_t *p_event_code, system_event_handler_
  *  \param [in] event code (get by register utility)
  *
  */
-void system_event_set(uint32_t event_code)
+__attribute__((section(".text_in_ram"))) void system_event_set(uint32_t event_code)
 {
     assert(!wiced_rtos_check_for_stack_overflow());
 

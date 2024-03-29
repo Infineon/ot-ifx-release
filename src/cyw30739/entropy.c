@@ -28,14 +28,11 @@
 
 /**
  * @file
- *   This file implements an entropy source based on TRNG.
- *
+ *   This file implements an entropy source based on TRNG and platform-related random functions.
  */
 
+#include <wiced_hal_platform.h>
 #include <openthread/platform/entropy.h>
-
-#include <stdio.h>
-#include <wiced_platform.h>
 
 #ifndef ENTROPY_DEBUG
 #define ENTROPY_DEBUG 0
@@ -51,7 +48,7 @@ otError otPlatEntropyGet(uint8_t *aOutput, uint16_t aOutputLength)
 {
     ENTROPY_TRACE("%s (%p, %d)\n", __FUNCTION__, aOutput, aOutputLength);
 
-    switch (wiced_platform_entropy_get(aOutput, aOutputLength))
+    switch (wiced_hal_platform_random_get(aOutput, aOutputLength, NULL))
     {
     case WICED_BADARG:
         return OT_ERROR_INVALID_ARGS;

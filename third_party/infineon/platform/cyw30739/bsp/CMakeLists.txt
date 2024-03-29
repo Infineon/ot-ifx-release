@@ -26,22 +26,53 @@
 #  POSSIBILITY OF SUCH DAMAGE.
 #
 
-# Add third part source files to mbedtls library
-list(APPEND thirdparty_src ${CMAKE_CURRENT_SOURCE_DIR}/src/${IFX_PLATFORM}/mbedtls/library/ccm_alt.c)
-list(APPEND thirdparty_src ${CMAKE_CURRENT_SOURCE_DIR}/src/${IFX_PLATFORM}/mbedtls/library/aes_alt.c)
-list(APPEND thirdparty_src ${CMAKE_CURRENT_SOURCE_DIR}/src/${IFX_PLATFORM}/mbedtls/library/sha256_alt.c)
-list(APPEND thirdparty_lib infineon-base-${IFX_PLATFORM})
-list(
-        APPEND
-        OT_PUBLIC_INCLUDES
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/${IFX_PLATFORM}/mbedtls/include"
-    )
+set(BOARD_CONFIG_SOURCES
+    cycfg.c
+    cycfg_pins.c
+)
 
-# Add replaced aes ccm utilities to openthread stack
-list(APPEND COMMON_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/${IFX_PLATFORM}/crypto/aes_ccm_alt.cpp)
+set(DESIGN_MODUS ${CMAKE_CURRENT_SOURCE_DIR}/${IFX_BOARD}/design.modus)
 
-list(
-        APPEND
-        COMMON_INCLUDES
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/${IFX_PLATFORM}/crypto"
-        )
+string(TOUPPER ${IFX_BOARD} BOARD_DIR)
+string(PREPEND BOARD_DIR ${IFX_BOARD}/TARGET_)
+
+add_custom_command(
+    OUTPUT ${BOARD_CONFIG_SOURCES}
+    COMMAND ${MTB_TOOLS_DIR}/device-configurator/device-configurator-cli
+        --output-dir
+        ${CMAKE_CURRENT_BINARY_DIR}
+        --library
+        ${BASELIB_DIR}/devicesupport.xml
+        --build
+        ${DESIGN_MODUS}
+        --readonly
+    DEPENDS
+        ${BASELIB_DIR}/devicesupport.xml
+        ${DESIGN_MODUS}
+)
+
+add_library(infineon-board-${IFX_BOARD}
+    ${BOARD_CONFIG_SOURCES}
+)
+
+# Add compile option for platform board library
+target_compile_definitions(
+    infineon-board-${IFX_BOARD}
+    PUBLIC
+)
+
+# Add include directory for platform board library
+target_include_directories(
+    infineon-board-${IFX_BOARD}
+    PUBLIC
+        ${BOARD_DIR}
+        ${CMAKE_CURRENT_BINARY_DIR}
+        ${PROJECT_SOURCE_DIR}/third_party/infineon/btsdk-include
+)
+
+# Set the dependency between platform board library and platform base library
+target_link_libraries(
+    infineon-board-${IFX_BOARD}
+    PRIVATE
+        infineon-base-${IFX_PLATFORM}
+)

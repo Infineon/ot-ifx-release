@@ -35,6 +35,7 @@
 #include <assert.h>
 #include <hal/wiced_hal_wdog.h>
 #include <stdio.h>
+#include <openthread/cli.h>
 #include <openthread/platform/misc.h>
 
 #ifndef MISC_DEBUG
@@ -57,3 +58,15 @@ void otPlatReset(otInstance *aInstance)
 }
 
 void otPlatAssertFail(const char *aFilename, int aLineNumber) { __assert_func(aFilename, aLineNumber, NULL, NULL); }
+
+void otPlatWakeHost(void)
+{
+    // TODO: implement an operation to wake the host from sleep state.
+}
+
+otPlatResetReason otPlatGetResetReason(otInstance *aInstance)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    // TODO: Write me!
+    return OT_PLAT_RESET_REASON_POWER_ON;
+}

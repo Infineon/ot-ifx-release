@@ -40,14 +40,21 @@
 #else
 #include <openthread/platform/uart.h>
 #endif
+#include <wiced_hal_platform.h>
 #include <wiced_hal_puart.h>
-
-#include <wiced_platform.h>
 #include <wiced_rtos.h>
+
+#if OPENTHREAD_CONFIG_NCP_HDLC_ENABLE
+#include "lib/spinel/spinel.h"
+#endif
 
 #include "system.h"
 
+#if OPENTHREAD_CONFIG_NCP_HDLC_ENABLE
+#define UART_RX_BUFFER_SIZE SPINEL_FRAME_MAX_SIZE
+#else
 #define UART_RX_BUFFER_SIZE (512)
+#endif
 
 #ifdef CLI_COMMAND_SEPARATOR
 

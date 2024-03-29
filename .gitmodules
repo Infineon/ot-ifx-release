@@ -1,15 +1,39 @@
 [submodule "openthread"]
 	path = openthread
 	url = https://github.com/openthread/openthread.git
-[submodule "third_party/infineon/platform/cyw30739/30739a0"]
-	path = third_party/infineon/platform/cyw30739/30739a0
-	url = https://github.com/Infineon/OT-Matter-30739A0.git
-[submodule "third_party/infineon/platform/cyw30739/bsp/cyw930739m2evb-01/TARGET_CYW930739M2EVB-01"]
-	path = third_party/infineon/platform/cyw30739/bsp/cyw930739m2evb-01/TARGET_CYW930739M2EVB-01
-	url = https://github.com/Infineon/OT-Matter-TARGET_CYW930739M2EVB-01.git
 [submodule "third_party/infineon/btsdk-tools"]
 	path = third_party/infineon/btsdk-tools
 	url = https://github.com/Infineon/btsdk-tools.git
 [submodule "third_party/infineon/btsdk-include"]
 	path = third_party/infineon/btsdk-include
 	url = https://github.com/Infineon/btsdk-include.git
+	branch = master
+[submodule "third_party/infineon/wpan-sdk"]
+	path = third_party/infineon/wpan-sdk
+	url = https://github.com/Infineon/wpan-sdk.git
+[submodule "third_party/infineon/platform/cyw30739/30739a0"]
+	path = third_party/infineon/platform/cyw30739/30739a0
+	url = https://github.com/Infineon/OT-Matter-30739A0.git
+[submodule "third_party/infineon/platform/cyw30739/30739b2"]
+	path = third_party/infineon/platform/cyw30739/30739b2
+	url = https://github.com/Infineon/OT-Matter-30739B2.git
+[submodule "third_party/infineon/platform/cyw30739/bsp/cyw30739b2-p5-evk-01/TARGET_CYW30739B2-P5-EVK-01"]
+	path = third_party/infineon/platform/cyw30739/bsp/cyw30739b2-p5-evk-01/TARGET_CYW30739B2-P5-EVK-01
+	url = https://github.com/Infineon/OT-Matter-BSP.git
+	branch = CYW30739A0-P5-EVK-01
+[submodule "third_party/infineon/platform/cyw30739/bsp/cyw30739b2-p5-evk-02/TARGET_CYW30739B2-P5-EVK-02"]
+	path = third_party/infineon/platform/cyw30739/bsp/cyw30739b2-p5-evk-02/TARGET_CYW30739B2-P5-EVK-02
+	url = https://github.com/Infineon/OT-Matter-BSP.git
+	branch = CYW30739A0-P5-EVK-02
+[submodule "third_party/infineon/platform/cyw30739/bsp/cyw30739b2-p5-evk-03/TARGET_CYW30739B2-P5-EVK-03"]
+	path = third_party/infineon/platform/cyw30739/bsp/cyw30739b2-p5-evk-03/TARGET_CYW30739B2-P5-EVK-03
+	url = https://github.com/Infineon/OT-Matter-BSP.git
+	branch = CYW30739A0-P5-EVK-03
+[submodule "third_party/infineon/platform/cyw30739/bsp/cyw930739m2evb-01/TARGET_CYW930739M2EVB-01"]
+	path = third_party/infineon/platform/cyw30739/bsp/cyw930739m2evb-01/TARGET_CYW930739M2EVB-01
+	url = https://github.com/Infineon/OT-Matter-BSP.git
+	branch = CYW930739M2EVB-01
+[submodule "third_party/infineon/platform/cyw30739/bsp/cyw930739m2evb-02/TARGET_CYW930739M2EVB-02"]
+	path = third_party/infineon/platform/cyw30739/bsp/cyw930739m2evb-02/TARGET_CYW930739M2EVB-02
+	url = https://github.com/Infineon/OT-Matter-BSP.git
+	branch = CYW930739M2EVB-02

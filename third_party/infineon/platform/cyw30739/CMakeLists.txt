@@ -27,56 +27,28 @@
 #
 
 # Add platform base library
-add_library(
-                infineon-base-${IFX_PLATFORM}
-                30739a0/COMPONENT_30739A0/platforms/platform_entropy.c
-                30739a0/COMPONENT_30739A0/platforms/platform_retarget_lock.c
-                30739a0/COMPONENT_30739A0/platforms/platform_stdio.c
-                30739a0/COMPONENT_30739A0/platforms/wiced_platform.c
-                30739a0/COMPONENT_30739A0/platforms/wiced_platform_bt_cfg.c
-                30739a0/COMPONENT_30739A0/platforms/wiced_platform_memory.c
-                30739a0/COMPONENT_30739A0/platforms/wiced_platform_os.c
-                30739a0/COMPONENT_30739A0/WICED/common/spar_setup.c
-           )
-
-# Add compile definition for platform base library
-target_compile_definitions(
-                            infineon-base-${IFX_PLATFORM}
-                            PUBLIC
-                                BCM20739=1
-                            PRIVATE
-                                CY_PLATFORM_SWDCK=WICED_P02
-                                CY_PLATFORM_SWDIO=WICED_P03
-                                ENABLE_DEBUG=0
-                                SPAR_CRT_SETUP=spar_crt_setup
-                          )
+add_library(infineon-base-${IFX_PLATFORM} INTERFACE)
 
 # Add include directory for platform base library
 target_include_directories(
                             infineon-base-${IFX_PLATFORM}
-                            PUBLIC
-                                30739a0/COMPONENT_30739A0/platforms
-                                30739a0/COMPONENT_30739A0/include
-                                30739a0/COMPONENT_30739A0/include/hal
-                                30739a0/COMPONENT_30739A0/include/internal
-                                30739a0/COMPONENT_30739A0/include/stack
-                                30739a0/COMPONENT_30739A0/internal/30739A0
-                                30739a0/COMPONENT_30739A0/WICED/common
+                            INTERFACE
+                                ${IFX_CHIPSET}/COMPONENT_${IFX_CHIPSET_UPPERCASE}/include
+                                ${IFX_CHIPSET}/COMPONENT_${IFX_CHIPSET_UPPERCASE}/include/hal
+                                ${IFX_CHIPSET}/COMPONENT_${IFX_CHIPSET_UPPERCASE}/include/internal
+                                ${IFX_CHIPSET}/COMPONENT_${IFX_CHIPSET_UPPERCASE}/include/stack
+                                ${IFX_CHIPSET}/COMPONENT_${IFX_CHIPSET_UPPERCASE}/internal/${IFX_CHIPSET_UPPERCASE}
                           )
+
+# Add include directory for openthread stack
+target_include_directories(ot-config INTERFACE $<TARGET_PROPERTY:infineon-base-${IFX_PLATFORM},INTERFACE_INCLUDE_DIRECTORIES>)
 
 # Add compile option for platform base library
 target_compile_options(
                         infineon-base-${IFX_PLATFORM}
-                        PUBLIC
-                            @${CMAKE_CURRENT_SOURCE_DIR}/30739a0/COMPONENT_30739A0/internal/30739A0/gcc/30739A0.cflag
+                        INTERFACE
+                            @${CMAKE_CURRENT_SOURCE_DIR}/${IFX_CHIPSET}/COMPONENT_${IFX_CHIPSET_UPPERCASE}/internal/${IFX_CHIPSET_UPPERCASE}/gcc/${IFX_CHIPSET_UPPERCASE}.cflag
                       )
 
-# Add libraries used for generating platform base library
-target_link_libraries(
-                        infineon-base-${IFX_PLATFORM}
-                        PRIVATE
-                            infineon-board-${IFX_BOARD}
-                     )
-
 # Add platform board library
-add_subdirectory(bsp/${IFX_BOARD})
+add_subdirectory(bsp)

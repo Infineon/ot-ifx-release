@@ -81,6 +81,7 @@ typedef enum
 {
     I15DOT4_ADDR_MATCH_FLAG_FRAME_PENDING = 0x01,
     I15DOT4_ADDR_MATCH_FLAG_VENDOR_IE     = 0x02,
+    I15DOT4_ADDR_MATCH_FLAG_CSL_IE        = 0x04,
     I15DOT4_ADDR_MATCH_FLAG_EXT_ADDR_MODE = 0x80,
 } ADDR_MATCH_TYPE_t;
 
@@ -231,6 +232,10 @@ enum
     I15DOT4_CMDID_THREAD_DATA_IND            = 86,
     I15DOT4_CMDID_THREAD_ADDR_MATCH_REQ      = 87,
     I15DOT4_CMDID_THREAD_ADDR_MATCH_CONF     = 88,
+    I15DOT4_CMDID_ACTIVATE_TASK_REQ          = 89,
+    I15DOT4_CMDID_ACTIVATE_TASK_CONF         = 90,
+    I15DOT4_CMDID_THREAD_CSL_RX_REQ          = 91,
+    I15DOT4_CMDID_THREAD_CSL_RX_CONF         = 92,
 
     I15DOT4_CMDID_APP_ACTION     = 128,
     I15DOT4_CMDID_APP_ACTION_MSG = 129,
@@ -264,9 +269,9 @@ typedef enum
     /*
      * CCA Mode 3: Carrier sense with energy above threshold. CCA shall report a busy medium using
      *             a logical combination of:
-     *                 — Detection of a signal with the modulation and spreading characteristics of
-     *                   this standard
-     *                 — Energy above the ED threshold, where the logical operator may be AND or OR
+     *                  - Detection of a signal with the modulation and spreading characteristics of
+     *                    this standard
+     *                  - Energy above the ED threshold, where the logical operator may be AND or OR
      *
      */
     I15DOT4_PHY_CCA_MODE_3 = 2,
@@ -655,6 +660,24 @@ typedef struct __attribute__((packed)) _I15DOT4_MLME_SET_REQ
     UINT32  attrib_len;
     uint8_t attrib[249];
 } I15DOT4_MLME_SET_REQ_t;
+
+typedef struct __attribute__((packed)) _I15DOT4_THREAD_CSL_RX_REQ
+{
+    uint8_t  context_id;
+    uint8_t  cmd_id;
+    uint8_t  enable;
+    uint64_t base_time;
+    uint32_t phase;
+    uint32_t period;
+    uint32_t window;
+} I15DOT4_THREAD_CSL_RX_REQ_t;
+
+typedef struct __attribute__((packed)) _I15DOT4_THREAD_CSL_RX_CONF
+{
+    uint8_t context_id;
+    uint8_t cmd_id;
+    uint8_t status;
+} I15DOT4_THREAD_CSL_RX_CONF_t;
 
 typedef struct __attribute__((packed)) _I15DOT4_MLME_SET_CONF
 {

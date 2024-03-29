@@ -27,6 +27,18 @@
 #  POSSIBILITY OF SUCH DAMAGE.
 #
 
+# Keep folder information
+if [[ -n ${BASH_SOURCE[0]} ]]; then
+    script_path="${BASH_SOURCE[0]}"
+else
+    script_path="$0"
+fi
+
+script_dir="$(dirname "$(realpath "$script_path")")"
+repo_dir="$(dirname "$script_dir")"
+
+source "$script_dir"/common_utility
+
 ###################################################################################################
 #
 # Utilities
@@ -38,53 +50,131 @@ die()
     exit 1
 }
 
-available_platforms_load()
-{
-    cd "$repo_dir"/third_party/infineon/platform
-
-    local folders=""
-    mapfile -d '' folders < <(find . -maxdepth 1 -type d -print0 | tr -d './')
-
-    local i=0
-    for folder in "${folders[@]}"; do
-        if [[ ${#folder} != 0 ]]; then
-            IFX_PLATFORMS[i++]="$folder"
-        fi
-    done
-
-    cd "$current_dir"
-
-    echo "Available Platforms: ${IFX_PLATFORMS[*]}"
-}
-
 available_boards_load()
 {
-    cd "$repo_dir"/third_party/infineon/platform/"$1"/bsp
-
-    local folders=()
-    mapfile -d '' folders < <(find . -maxdepth 1 -type d -print0 | tr -d './')
-
-    local i=0
-    for folder in "${folders[@]}"; do
-        if [[ ${#folder} != 0 ]]; then
-            IFX_BOARDS[i++]="$folder"
-        fi
-    done
-
-    cd "$current_dir"
-
-    echo "Available Boards for $1: ${IFX_BOARDS[*]}"
+    mapfile -t "$1" < <(find "$2"/ -mindepth 1 -maxdepth 1 -type d -name "*$3*" -printf "%f\n")
 }
 
-build()
+available_apps_load()
+{
+    IFX_APPS=("cli" "ncp" "rcp")
+    echo "Available apps: ${IFX_APPS[*]}"
+}
+
+build_cli_uart()
 {
     # Create the output folder
-    builddir="${OT_CMAKE_BUILD_DIR:-$repo_dir/build/$1}"
+    builddir="${OT_CMAKE_BUILD_DIR:-$repo_dir/build/$1/cli}"
     shift
 
     echo "Output folder: $builddir"
 
-    cmake -GNinja "$@" -S "${repo_dir}" -B "${builddir}"
+    local options=(
+        "-DCMAKE_BUILD_TYPE=Debug"
+        "-DI15DOT4_IEEE_EUI64="
+        "-DOT_APP_NCP=OFF"
+        "-DOT_APP_CLI=ON"
+        "-DOT_APP_RCP=OFF"
+        "-DOT_BORDER_ROUTER=ON"
+        "-DOT_COAP=ON"
+        "-DOT_COAPS=ON"
+        "-DOT_COMMISSIONER=ON"
+        "-DOT_CSL_AUTO_SYNC=OFF"
+        "-DOT_CSL_RECEIVER=ON"
+        "-DOT_DHCP6_CLIENT=ON"
+        "-DOT_DNS_CLIENT=ON"
+        "-DOT_DUA=ON"
+        "-DOT_ECDSA=ON"
+        "-DOT_FTD=ON"
+        "-DOT_JOINER=ON"
+        "-DOT_LINK_METRICS_INITIATOR=ON"
+        "-DOT_LINK_METRICS_SUBJECT=ON"
+        "-DOT_LOG_LEVEL=CRIT"
+        "-DOT_MAC_FILTER=ON"
+        "-DOT_MLR=ON"
+        "-DOT_PLATFORM=external"
+        "-DOT_RCP=OFF"
+        "-DOT_SLAAC=ON"
+        "-DOT_SRP_CLIENT=ON"
+        "-DOT_THREAD_VERSION=1.2"
+    )
+
+    options+=("-DCMAKE_TOOLCHAIN_FILE=src/${target_platform}/arm-none-eabi.cmake")
+
+    cmake -GNinja "$@" -S "${repo_dir}" -B "${builddir}" "${options[@]}"
+    cmake --build "${builddir}"
+}
+
+build_ncp_uart()
+{
+    # Create the output folder
+    builddir="${OT_CMAKE_BUILD_DIR:-$repo_dir/build/$1/ncp}"
+    shift
+
+    echo "Output folder: $builddir"
+
+    local options=(
+        "-DCMAKE_BUILD_TYPE=Debug"
+        "-DI15DOT4_IEEE_EUI64="
+        "-DOT_APP_NCP=ON"
+        "-DOT_APP_CLI=OFF"
+        "-DOT_APP_RCP=OFF"
+        "-DOT_BORDER_ROUTER=ON"
+        "-DOT_COAP=ON"
+        "-DOT_COAPS=ON"
+        "-DOT_COMMISSIONER=ON"
+        "-DOT_CSL_RECEIVER=ON"
+        "-DOT_DHCP6_CLIENT=ON"
+        "-DOT_DNS_CLIENT=ON"
+        "-DOT_DUA=ON"
+        "-DOT_ECDSA=ON"
+        "-DOT_FTD=ON"
+        "-DOT_JOINER=ON"
+        "-DOT_LINK_METRICS_INITIATOR=ON"
+        "-DOT_LINK_METRICS_SUBJECT=ON"
+        "-DOT_LOG_LEVEL=CRIT"
+        "-DOT_MAC_FILTER=ON"
+        "-DOT_MLR=ON"
+        "-DOT_PLATFORM=external"
+        "-DOT_RCP=OFF"
+        "-DOT_SLAAC=ON"
+        "-DOT_SRP_CLIENT=ON"
+        "-DOT_THREAD_VERSION=1.2"
+    )
+
+    options+=("-DCMAKE_TOOLCHAIN_FILE=src/${target_platform}/arm-none-eabi.cmake")
+
+    cmake -GNinja "$@" -S "${repo_dir}" -B "${builddir}" "${options[@]}"
+    cmake --build "${builddir}"
+}
+
+# Utility to build OpenThread RCP
+build_rcp_uart()
+{
+    # Create the output folder
+    builddir="${OT_CMAKE_BUILD_DIR:-$repo_dir/build/$1/rcp}"
+    shift
+
+    echo "Output folder: $builddir"
+
+    local options=(
+        "-DCMAKE_BUILD_TYPE=Debug"
+        "-DI15DOT4_IEEE_EUI64="
+        "-DOT_APP_CLI=OFF"
+        "-DOT_APP_NCP=OFF"
+        "-DOT_APP_RCP=ON"
+        "-DOT_COMPILE_WARNING_AS_ERROR=ON"
+        "-DOT_FTD=OFF"
+        "-DOT_LOG_LEVEL=CRIT"
+        "-DOT_MTD=OFF"
+        "-DOT_PLATFORM=external"
+        "-DOT_RCP=ON"
+        "-DOT_THREAD_VERSION=1.2"
+    )
+
+    options+=("-DCMAKE_TOOLCHAIN_FILE=src/${target_platform}/arm-none-eabi.cmake")
+
+    cmake -GNinja "$@" -S "${repo_dir}" -B "${builddir}" "${options[@]}"
     cmake --build "${builddir}"
 }
 
@@ -97,19 +187,28 @@ main()
     shift
     local target_board="$1"
 
+    # Read target chipset
+    shift
+    local target_chipset="$1"
+
+    # Read target app
+    shift
+    local target_app="$1"
+
     # Read build options from command line
     shift
     local cmdline_options=("$@")
 
-    # Load general options
-    local options=("${OT_OPTIONS[@]}")
-
-    options+=("-DCMAKE_TOOLCHAIN_FILE=src/${target_platform}/arm-none-eabi.cmake")
-
-    echo "Building $target_board ($target_platform)"
+    echo "Building $target_board $target_app"
     echo "User specified build options: ${cmdline_options[*]}"
     echo "General options: ${options[*]}}"
-    build "$target_board" -DOT_BUILD_EXECUTABLES=OFF -DIFX_PLATFORM="$target_platform" -DIFX_BOARD="$target_board" "${options[@]}" "${cmdline_options[@]}"
+    if [ "$target_app" == "cli" ]; then
+        build_cli_uart "$target_board" "$target_app" -DOT_BUILD_EXECUTABLES=OFF -DIFX_PLATFORM="$target_platform" -DIFX_CHIPSET="$target_chipset" -DIFX_BOARD="$target_board" "${cmdline_options[@]}"
+    elif [ "$target_app" == "ncp" ]; then
+        build_ncp_uart "$target_board" "$target_app" -DOT_BUILD_EXECUTABLES=OFF -DIFX_PLATFORM="$target_platform" -DIFX_CHIPSET="$target_chipset" -DIFX_BOARD="$target_board" "${cmdline_options[@]}"
+    elif [ "$target_app" == "rcp" ]; then
+        build_rcp_uart "$target_board" "$target_app" -DOT_BUILD_EXECUTABLES=OFF -DIFX_PLATFORM="$target_platform" -DIFX_CHIPSET="$target_chipset" -DIFX_BOARD="$target_board" "${cmdline_options[@]}"
+    fi
 }
 
 ###################################################################################################
@@ -120,81 +219,106 @@ main()
 
 set -euxo pipefail
 
-OT_OPTIONS=(
-    "-DCMAKE_BUILD_TYPE=Debug"
-    "-DI15DOT4_IEEE_EUI64="
-    "-DOT_APP_NCP=OFF"
-    "-DOT_APP_RCP=OFF"
-    "-DOT_BORDER_ROUTER=ON"
-    "-DOT_COAP=ON"
-    "-DOT_COAPS=ON"
-    "-DOT_COMMISSIONER=ON"
-    "-DOT_DHCP6_CLIENT=ON"
-    "-DOT_DNS_CLIENT=ON"
-    "-DOT_DUA=ON"
-    "-DOT_ECDSA=ON"
-    "-DOT_JOINER=ON"
-    "-DOT_MLR=ON"
-    "-DOT_LINK_METRICS_SUBJECT=ON"
-    "-DOT_LOG_LEVEL=CRIT"
-    "-DOT_PLATFORM=external"
-    "-DOT_RCP=OFF"
-    "-DOT_SLAAC=ON"
-    "-DOT_SRP_CLIENT=ON"
-    "-DOT_THREAD_VERSION=1.2"
-)
-readonly OT_OPTIONS
-
-# Keep folder information
-if [[ -n ${BASH_SOURCE[0]} ]]; then
-    script_path="${BASH_SOURCE[0]}"
-else
-    script_path="$0"
-fi
-
-script_dir="$(dirname "$(realpath "$script_path")")"
-repo_dir="$(dirname "$script_dir")"
-current_dir=$(pwd)
-
 # Parse input parameters
 target_platform=''
+target_chipset=''
 target_board=''
+target_app=''
 cmdline_options=()
+declare -a ifx_platform=()
+platform_dir="$(pwd)"/third_party/infineon/platform
+
 if [[ $# == 0 ]]; then
     # Load available platforms
-    available_platforms_load
+    available_platforms_load ifx_platform "$platform_dir"
+    echo "Available Platforms: ${ifx_platform[*]}"
 
-    for target_platform in "${IFX_PLATFORMS[@]}"; do
-        # Load available boards for target platform
-        available_boards_load "$target_platform"
+    # Load available chipsets
+    for target_platform in "${ifx_platform[@]}"; do
+        chipsets=()
+        target_platform_dir="$platform_dir"/"$target_platform"
+
+        if [[ $target_platform == "cyw"* ]]; then # lead by "cyw"
+            chipset_group=${target_platform:3}
+
+            available_chipset_load chipsets "$target_platform_dir" "$chipset_group"
+            echo "Available Chipsets for ${target_platform}: ${chipsets[*]}"
+
+            # Load available board for target chipset
+            boards=()
+            for target_chip in "${chipsets[@]}"; do
+                if [[ $target_chip == "30739a0" ]]; then # special case: 30739a0
+                    chispset_name="930739"
+                else
+                    chispset_name="$target_chip"
+                fi
+
+                target_bsp_dir="$platform_dir"/"$target_platform"/bsp
+                available_boards_load boards "$target_bsp_dir" "$chispset_name"
+                echo "Available boards for ${target_chip}: ${boards[*]}"
+            done
+        fi
     done
 
-    die "Please used platform=XXX and board=YYY to specifiy target board or use make all to build all available executables."
+    available_apps_load
+
+    die "Please used platform=WWW chipset=XXX board=YYY app=ZZZ to specifiy target board or use make all to build all available executables."
 elif [[ $1 == "all" ]]; then # Build all supported platforms with all supported boards
     # Parse command line options
     shift
     cmdline_options+=("$@")
 
+    available_apps_load
+
     # Load available platforms
-    available_platforms_load
+    available_platforms_load ifx_platform "$platform_dir"
+    echo "Available Platforms: ${ifx_platform[*]}"
 
-    for target_platform in "${IFX_PLATFORMS[@]}"; do
-        # Load available boards for target platform
-        available_boards_load "$target_platform"
+    for target_platform in "${ifx_platform[@]}"; do
+        chipsets=()
+        target_platform_dir="$platform_dir"/"$target_platform"
 
-        for target_board in "${IFX_BOARDS[@]}"; do
-            main "$target_platform" "$target_board" "${cmdline_options[@]}"
-        done
+        if [[ $target_platform == "cyw"* ]]; then # lead by "cyw"
+            chipset_group=${target_platform:3}
+
+            available_chipset_load chipsets "$target_platform_dir" "$chipset_group"
+
+            # Load available board for target chipset
+            boards=()
+            for target_chip in "${chipsets[@]}"; do
+                if [[ $target_chip == "30739a0" ]]; then # special case: 30739a0
+                    chispset_name="930739"
+                else
+                    chispset_name="$target_chip"
+                fi
+
+                target_bsp_dir="$platform_dir"/"$target_platform"/bsp
+                available_boards_load boards "$target_bsp_dir" "$chispset_name"
+                echo "Available boards for ${target_chip}: ${boards[*]}"
+
+                for target_board in "${boards[@]}"; do
+                    for target_app in "${IFX_APPS[@]}"; do
+                        main "$target_platform" "$target_board" "$target_chip" "$target_app" "${cmdline_options[@]}"
+                    done
+                done
+            done
+        fi
     done
 else
     # Build specified platform with specified board
     sub_string_platform="platform="
+    sub_string_chipset="chipset="
     sub_string_board="board="
+    sub_string_app="app="
     for param in "$@"; do
         if [[ $param == "$sub_string_platform"* ]]; then
             target_platform=${param##"$sub_string_platform"}
+        elif [[ $param == "$sub_string_chipset"* ]]; then
+            target_chipset=${param##"$sub_string_chipset"}
         elif [[ $param == "$sub_string_board"* ]]; then
             target_board=${param##"$sub_string_board"}
+        elif [[ $param == "$sub_string_app"* ]]; then
+            target_app=${param##"$sub_string_app"}
         else
             cmdline_options+=("$param")
         fi
@@ -206,21 +330,56 @@ else
     fi
 
     # Load available platforms
-    available_platforms_load
+    available_platforms_load ifx_platform "$platform_dir"
+
+    echo $target_platform
 
     # Check if the target platform is available
-    echo "${IFX_PLATFORMS[@]}" | grep -wq "$target_platform" || die "Unsupported platform $target_platform"
+    echo "${ifx_platform[@]}" | grep -wq "$target_platform" || die "Unsupported platform $target_platform"
+
+    # Check if target chipset has been assigned
+    if [ -z "$target_chipset" ]; then
+        die "target chipset has not been assigned"
+    fi
+
+    # Check if the target chipset is available
+    chipsets=()
+    target_platform_dir="$platform_dir"/"$target_platform"
+
+    if [[ $target_platform == "cyw"* ]]; then # lead by "cyw"
+        chipset_group=${target_platform:3}
+
+        available_chipset_load chipsets "$target_platform_dir" "$chipset_group"
+
+        echo "${chipsets[@]}" | grep -wq "$target_chipset" || die "Unsupported chipset $target_chipset"
+    fi
 
     # Check if target board has been assigned
     if [ -z "$target_board" ]; then
         die "target board has not been assigned"
     fi
 
-    # Load available boards for target platform
-    available_boards_load $target_platform
-
     # Check if the target board is available
-    echo "${IFX_BOARDS[@]}" | grep -wq "${target_board}" || die "Unsupported board $target_board for $target_platform"
+    boards=()
+    target_bsp_dir="$platform_dir"/"$target_platform"/bsp
 
-    main "$target_platform" "$target_board" "${cmdline_options[@]}"
+    if [[ $target_chipset == "30739a0" ]]; then # special case: 30739a0
+        chispset_name="930739"
+    else
+        chispset_name="$target_chipset"
+    fi
+
+    available_boards_load boards "$target_bsp_dir" "$chispset_name"
+    echo "${boards[@]}" | grep -wq "${target_board}" || die "Unsupported board $target_board for $target_chipset"
+
+    # Check if target app has been assigned
+    if [ -z "$target_app" ]; then
+        die "target app has not been assigned"
+    fi
+
+    # Check if the target app is available
+    available_apps_load
+    echo "${IFX_APPS[@]}" | grep -wq "${target_app}" || die "Unsupported app $target_app"
+
+    main "$target_platform" "$target_board" "$target_chipset" "$target_app" "${cmdline_options[@]}"
 fi

@@ -45,15 +45,17 @@
 #include "packet_statistics.h"
 #endif // PACKET_STATISTICS
 
-#if SERIAL_FLASH
+#if IFX_CLI_COMMAND_SERIAL_FLASH
+#include "cy_serial_flash.h"
+#include <string.h>
+#include <wiced_hal_pspi.h>
 #include <wiced_hal_sflash.h>
-#include <wiced_platform.h>
 #endif
 
 //=================================================================================================
 // Type Definitions and Enums
 //=================================================================================================
-#if SERIAL_FLASH
+#if IFX_CLI_COMMAND_SERIAL_FLASH
 
 /* Buffer length. */
 #define IFX_OT_CLI_CMD_SERIAL_FLASH_BUFFER_LEN 256
@@ -65,7 +67,7 @@ typedef enum
     IFX_OT_CLI_CMD_SERIAL_FLASH_API_SOURCE_FIRMWARE = 1,
 } IFX_OT_CLI_CMD_SERIAL_FLASH_API_SOURCE_t;
 
-#endif // SERIAL_FLASH
+#endif // IFX_CLI_COMMAND_SERIAL_FLASH
 
 //=================================================================================================
 //  Structure
@@ -73,12 +75,12 @@ typedef enum
 
 typedef struct
 {
-#if SERIAL_FLASH
+#if IFX_CLI_COMMAND_SERIAL_FLASH
     struct
     {
         IFX_OT_CLI_CMD_SERIAL_FLASH_API_SOURCE_t api_source;
     } serial_flash;
-#endif // SERIAL_FLASH
+#endif // IFX_CLI_COMMAND_SERIAL_FLASH
 } IFX_OT_CLI_CMD_CB_t;
 
 //=================================================================================================
@@ -92,17 +94,17 @@ typedef struct
 #if (OPENTHREAD_CONFIG_THREAD_VERSION == OT_THREAD_VERSION_1_1)
 static void ifx_ot_cli_cmd_handler_packet_statistics(uint8_t aArgsLength, char *aArgs[]);
 #else  // OPENTHREAD_CONFIG_THREAD_VERSION != OT_THREAD_VERSION_1_1
-static void ifx_ot_cli_cmd_handler_packet_statistics(void *aContext, uint8_t aArgsLength, char *aArgs[]);
+static otError ifx_ot_cli_cmd_handler_packet_statistics(void *aContext, uint8_t aArgsLength, char *aArgs[]);
 #endif // OPENTHREAD_CONFIG_THREAD_VERSION == OT_THREAD_VERSION_1_1
 #endif // PACKET_STATISTICS
 
-#if SERIAL_FLASH
+#if IFX_CLI_COMMAND_SERIAL_FLASH
 #if (OPENTHREAD_CONFIG_THREAD_VERSION == OT_THREAD_VERSION_1_1)
 static void ifx_ot_cli_cmd_handler_serial_flash(uint8_t aArgsLength, char *aArgs[]);
 #else  // OPENTHREAD_CONFIG_THREAD_VERSION != OT_THREAD_VERSION_1_1
-static void ifx_ot_cli_cmd_handler_serial_flash(void *aContext, uint8_t aArgsLength, char *aArgs[]);
+static otError ifx_ot_cli_cmd_handler_serial_flash(void *aContext, uint8_t aArgsLength, char *aArgs[]);
 #endif // OPENTHREAD_CONFIG_THREAD_VERSION == OT_THREAD_VERSION_1_1
-#endif // SERIAL_FLASH
+#endif // IFX_CLI_COMMAND_SERIAL_FLASH
 
 //=================================================================================================
 //  Static Variables
@@ -112,14 +114,14 @@ static const otCliCommand ifx_ot_cli_commands[] = {
     {"ifx_packet_statistics", ifx_ot_cli_cmd_handler_packet_statistics},
 #endif // PACKET_STATISTICS
 
-#if SERIAL_FLASH
+#if IFX_CLI_COMMAND_SERIAL_FLASH
     {"ifx_serial_flash", ifx_ot_cli_cmd_handler_serial_flash},
-#endif // SERIAL_FLASH
+#endif // IFX_CLI_COMMAND_SERIAL_FLASH
 };
 
-#if SERIAL_FLASH
+#if IFX_CLI_COMMAND_SERIAL_FLASH
 static IFX_OT_CLI_CMD_CB_t ifx_ot_cli_cmd_cb = {0};
-#endif // SERIAL_FLASH
+#endif // IFX_CLI_COMMAND_SERIAL_FLASH
 
 //=================================================================================================
 //	Global Functions
@@ -150,7 +152,7 @@ void ifx_ot_cli_cmd_install(otInstance *ot_instance)
 //=================================================================================================
 //	Local (Static) Functions
 //=================================================================================================
-#if SERIAL_FLASH
+#if IFX_CLI_COMMAND_SERIAL_FLASH
 
 static void ifx_ot_cli_cmd_handler_serial_flash_usage_display(void)
 {
@@ -171,8 +173,12 @@ static void ifx_ot_cli_cmd_handler_serial_flash_init(void)
     switch (ifx_ot_cli_cmd_cb.serial_flash.api_source)
     {
     case IFX_OT_CLI_CMD_SERIAL_FLASH_API_SOURCE_BSP:
-        wiced_platform_serial_flash_init();
-        otCliOutputFormat("Serial Flash size: %lu bytes\n", wiced_platform_serial_flash_size_get());
+        wiced_hal_pspi_reset(FLASH_NOR_SPI_INTERFACE);
+        wiced_hal_pspi_init(FLASH_NOR_SPI_INTERFACE, FLASH_NOR_SPI_CLOCK_RATE, SPI_MSB_FIRST, SPI_SS_ACTIVE_LOW,
+                            SPI_MODE_0);
+
+        cy_serial_flash_init();
+        otCliOutputFormat("Serial Flash size: %lu bytes\n", cy_serial_flash_get_flash_size());
         break;
     case IFX_OT_CLI_CMD_SERIAL_FLASH_API_SOURCE_FIRMWARE:
         wiced_hal_sflash_init();
@@ -189,10 +195,10 @@ static void ifx_ot_cli_cmd_handler_serial_flash_read(uint32_t target_addr, uint8
     switch (ifx_ot_cli_cmd_cb.serial_flash.api_source)
     {
     case IFX_OT_CLI_CMD_SERIAL_FLASH_API_SOURCE_BSP:
-        wiced_platform_serial_flash_read(target_addr, p_data, data_len);
+        cy_serial_flash_read(target_addr, p_data, data_len);
         break;
     case IFX_OT_CLI_CMD_SERIAL_FLASH_API_SOURCE_FIRMWARE:
-        wiced_hal_sflash_read(target_addr, data_len, p_data);
+        cy_serial_flash_read(target_addr, p_data, data_len);
         break;
     default:
         break;
@@ -204,7 +210,7 @@ static void ifx_ot_cli_cmd_handler_serial_flash_write(uint32_t target_addr, uint
     switch (ifx_ot_cli_cmd_cb.serial_flash.api_source)
     {
     case IFX_OT_CLI_CMD_SERIAL_FLASH_API_SOURCE_BSP:
-        wiced_platform_serial_flash_write(target_addr, p_data, data_len);
+        cy_serial_flash_write(target_addr, p_data, data_len);
         break;
     case IFX_OT_CLI_CMD_SERIAL_FLASH_API_SOURCE_FIRMWARE:
         wiced_hal_sflash_write(target_addr, data_len, p_data);
@@ -216,10 +222,15 @@ static void ifx_ot_cli_cmd_handler_serial_flash_write(uint32_t target_addr, uint
 
 static void ifx_ot_cli_cmd_handler_serial_flash_erase(uint32_t start_sector, uint32_t sector_num)
 {
+    uint32_t i;
+
     switch (ifx_ot_cli_cmd_cb.serial_flash.api_source)
     {
     case IFX_OT_CLI_CMD_SERIAL_FLASH_API_SOURCE_BSP:
-        wiced_platform_serial_flash_erase(start_sector, sector_num);
+        for (i = 0; i < sector_num; i++)
+        {
+            cy_serial_flash_erase(start_sector + i, FLASH_NOR_ERASE_SECTOR);
+        }
         break;
     case IFX_OT_CLI_CMD_SERIAL_FLASH_API_SOURCE_FIRMWARE:
         break;
@@ -245,9 +256,17 @@ static void ifx_ot_cli_cmd_handler_serial_flash_erase(uint32_t start_sector, uin
 #if (OPENTHREAD_CONFIG_THREAD_VERSION == OT_THREAD_VERSION_1_1)
 static void ifx_ot_cli_cmd_handler_serial_flash(uint8_t aArgsLength, char *aArgs[])
 #else
-static void ifx_ot_cli_cmd_handler_serial_flash(void *aContext, uint8_t aArgsLength, char *aArgs[])
+static otError ifx_ot_cli_cmd_handler_serial_flash(void *aContext, uint8_t aArgsLength, char *aArgs[])
 #endif
 {
+#if (OPENTHREAD_CONFIG_THREAD_VERSION == OT_THREAD_VERSION_1_1)
+#define INVALID_ARGS
+#define ERROR_NONE
+#else
+#define INVALID_ARGS OT_ERROR_INVALID_ARGS
+#define ERROR_NONE OT_ERROR_NONE
+#endif
+
     uint8_t  data[IFX_OT_CLI_CMD_SERIAL_FLASH_BUFFER_LEN] = {0};
     uint32_t i;
     uint32_t target_addr;
@@ -261,7 +280,7 @@ static void ifx_ot_cli_cmd_handler_serial_flash(void *aContext, uint8_t aArgsLen
     if (!aArgsLength)
     {
         ifx_ot_cli_cmd_handler_serial_flash_usage_display();
-        return;
+        return INVALID_ARGS;
     }
 
     if ((strncmp("api", aArgs[0], 3) == 0) && (strlen(aArgs[0]) == 3))
@@ -269,7 +288,7 @@ static void ifx_ot_cli_cmd_handler_serial_flash(void *aContext, uint8_t aArgsLen
         if (aArgsLength != 2)
         {
             ifx_ot_cli_cmd_handler_serial_flash_usage_display();
-            return;
+            return INVALID_ARGS;
         }
 
         /* Set API source. */
@@ -285,7 +304,7 @@ static void ifx_ot_cli_cmd_handler_serial_flash(void *aContext, uint8_t aArgsLen
         if (aArgsLength != 3)
         {
             ifx_ot_cli_cmd_handler_serial_flash_usage_display();
-            return;
+            return INVALID_ARGS;
         }
 
         /* Parse address. */
@@ -298,7 +317,7 @@ static void ifx_ot_cli_cmd_handler_serial_flash(void *aContext, uint8_t aArgsLen
         if (data_len > IFX_OT_CLI_CMD_SERIAL_FLASH_BUFFER_LEN)
         {
             ifx_ot_cli_cmd_handler_serial_flash_usage_display();
-            return;
+            return INVALID_ARGS;
         }
 
         /* Read data from serial flash. */
@@ -320,7 +339,7 @@ static void ifx_ot_cli_cmd_handler_serial_flash(void *aContext, uint8_t aArgsLen
         if (aArgsLength < 3)
         {
             ifx_ot_cli_cmd_handler_serial_flash_usage_display();
-            return;
+            return INVALID_ARGS;
         }
 
         /* Parse address. */
@@ -333,14 +352,14 @@ static void ifx_ot_cli_cmd_handler_serial_flash(void *aContext, uint8_t aArgsLen
         if (data_len > IFX_OT_CLI_CMD_SERIAL_FLASH_BUFFER_LEN)
         {
             ifx_ot_cli_cmd_handler_serial_flash_usage_display();
-            return;
+            return INVALID_ARGS;
         }
 
         /* Check argument length. */
         if (aArgsLength != (data_len + 3))
         {
             ifx_ot_cli_cmd_handler_serial_flash_usage_display();
-            return;
+            return INVALID_ARGS;
         }
 
         /* Parse data. */
@@ -358,7 +377,7 @@ static void ifx_ot_cli_cmd_handler_serial_flash(void *aContext, uint8_t aArgsLen
         if (aArgsLength != 3)
         {
             ifx_ot_cli_cmd_handler_serial_flash_usage_display();
-            return;
+            return INVALID_ARGS;
         }
 
         ifx_ot_cli_cmd_handler_serial_flash_erase((uint32_t)strtol(aArgs[1], NULL, 10),
@@ -367,10 +386,12 @@ static void ifx_ot_cli_cmd_handler_serial_flash(void *aContext, uint8_t aArgsLen
     else
     {
         ifx_ot_cli_cmd_handler_serial_flash_usage_display();
-        return;
+        return INVALID_ARGS;
     }
+
+    return ERROR_NONE;
 }
-#endif // SERIAL_FLASH
+#endif // IFX_CLI_COMMAND_SERIAL_FLASH
 
 #if PACKET_STATISTICS
 /**************************************************************************************************
@@ -390,9 +411,15 @@ static void ifx_ot_cli_cmd_handler_serial_flash(void *aContext, uint8_t aArgsLen
 #if (OPENTHREAD_CONFIG_THREAD_VERSION == OT_THREAD_VERSION_1_1)
 static void ifx_ot_cli_cmd_handler_packet_statistics(uint8_t aArgsLength, char *aArgs[])
 #else
-static void ifx_ot_cli_cmd_handler_packet_statistics(void *aContext, uint8_t aArgsLength, char *aArgs[])
+static otError ifx_ot_cli_cmd_handler_packet_statistics(void *aContext, uint8_t aArgsLength, char *aArgs[])
 #endif
 {
+#if (OPENTHREAD_CONFIG_THREAD_VERSION == OT_THREAD_VERSION_1_1)
+#define ERROR_NONE
+#else
+#define ERROR_NONE OT_ERROR_NONE
+#endif
+
     PACKET_STATISTICS_t statistics = {0};
 
 #if !(OPENTHREAD_CONFIG_THREAD_VERSION == OT_THREAD_VERSION_1_1)
@@ -409,6 +436,8 @@ static void ifx_ot_cli_cmd_handler_packet_statistics(void *aContext, uint8_t aAr
                       statistics.tx.status.success, statistics.tx.status.no_ack,
                       statistics.tx.status.channel_access_failure);
     otCliOutputFormat("Rx. - total: %ld\n", statistics.rx.num);
+
+    return ERROR_NONE;
 }
 #endif // PACKET_STATISTICS
 

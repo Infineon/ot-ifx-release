@@ -35,25 +35,23 @@ else()
     set(TOOLS_DIR ${TOOLS_DIR}/Linux64)
 endif()
 
-set(BASELIB_DIR ${PROJECT_SOURCE_DIR}/third_party/infineon/platform/${IFX_PLATFORM}/30739a0/COMPONENT_30739A0)
+set(BASELIB_DIR ${PROJECT_SOURCE_DIR}/third_party/infineon/platform/${IFX_PLATFORM}/${IFX_CHIPSET}/COMPONENT_${IFX_CHIPSET_UPPERCASE})
 
-string(REPLACE "-" ";" PATCH_NAME_LIST ${IFX_BOARD})
-list(GET PATCH_NAME_LIST 0 BOARD_NAME)
-list(GET PATCH_NAME_LIST 1 BOARD_VERSION)
-STRING(TOUPPER ${BOARD_NAME} BOARD_NAME)
-set(PATCH_DIR ${BASELIB_DIR}/internal/30739A0/patches_${BOARD_NAME}_${BOARD_VERSION})
+string(REPLACE "-" "_" PATCH_DIR ${IFX_BOARD})
+string(TOUPPER ${PATCH_DIR} PATCH_DIR)
+set(PATCH_DIR ${BASELIB_DIR}/internal/${IFX_CHIPSET_UPPERCASE}/patches_${PATCH_DIR})
 
 set(PLATFORM_DIR ${BASELIB_DIR}/platforms)
 set(SCRIPTS_DIR ${PROJECT_SOURCE_DIR}/third_party/infineon/platform/${IFX_PLATFORM}/scripts)
 set(PATCH_SYMBOLS ${PATCH_DIR}/patch.sym)
 set(BTP ${PLATFORM_DIR}/flash.btp)
-set(LIB_INSTALLER_C generated/30739A0/lib_installer.c)
-set(HDF_FILE ${BASELIB_DIR}/internal/30739A0/configdef30739A0.hdf)
+set(LIB_INSTALLER_C generated/${IFX_CHIPSET_UPPERCASE}/lib_installer.c)
+set(HDF_FILE ${BASELIB_DIR}/internal/${IFX_CHIPSET_UPPERCASE}/configdef${IFX_CHIPSET_UPPERCASE}.hdf)
 
 set(LINKER_DEFINES
     FLASH0_BEGIN_ADDR=0x00500000
     FLASH0_LENGTH=0x00100000
-    XIP_DS_OFFSET=0x0002D000
+    XIP_DS_OFFSET=0x00014000
     XIP_LEN=0x00068000
     SRAM_BEGIN_ADDR=0x00200000
     SRAM_LENGTH=0x00070000
@@ -70,82 +68,102 @@ set(CGS_LIST
     ${PLATFORM_DIR}/platform_xip.cgs
 )
 
-add_custom_command(
-                    OUTPUT
-                        ${LIB_INSTALLER_C}
-                    COMMAND
-                        bash --norc --noprofile
-                        ${SCRIPTS_DIR}/bt_gen_lib_installer.bash
-                        --scripts=${SCRIPTS_DIR}
-                        --out=${LIB_INSTALLER_C}
-                        $<$<BOOL:${VERBOSE}>:--verbose>
-                  )
+function(add_example_target)
+    set(APP_SOURCES ${ARGV0})
+    set(APP_INC_DIRS ${ARGV1})
+    set(APP_LINK_LIBS ${ARGV2})
+    set(APP_TYPE ${ARGV3})
+    set(DEVICE_TYPE ${ARGV4})
 
-function(add_example_target target_name source_files include_dirs link_libs)
-    add_executable(
-                    ${target_name}
-                    ${source_files}
-                    ${LIB_INSTALLER_C}
-                  )
+    set(TARGET_NAME ${APP_TYPE})
+    set(RUNTIME_OUTPUT_DIRECTORY bin)
+    set(RUNTIME_OUTPUT_NAME ${APP_TYPE})
 
-    set_property(TARGET ${target_name} PROPERTY SUFFIX .elf)
+    if(DEVICE_TYPE)
+        set(TARGET_NAME ${TARGET_NAME}-${DEVICE_TYPE})
+        set(RUNTIME_OUTPUT_DIRECTORY ${RUNTIME_OUTPUT_DIRECTORY}/${DEVICE_TYPE})
+    endif()
 
-    target_include_directories(
-                                ${target_name}
-                                PRIVATE
-                                ${include_dirs}
-                              )
+    set(LD_FILE ${RUNTIME_OUTPUT_DIRECTORY}/${RUNTIME_OUTPUT_NAME}.ld)
+    set(MAP_FILE ${RUNTIME_OUTPUT_DIRECTORY}/${RUNTIME_OUTPUT_NAME}.map)
+
+    add_executable(${TARGET_NAME}
+        ${APP_SOURCES}
+        ${LIB_INSTALLER_C}
+    )
+
+    set_property(TARGET ${TARGET_NAME} PROPERTY RUNTIME_OUTPUT_DIRECTORY ${RUNTIME_OUTPUT_DIRECTORY})
+    set_property(TARGET ${TARGET_NAME} PROPERTY RUNTIME_OUTPUT_NAME ${RUNTIME_OUTPUT_NAME})
+    set_property(TARGET ${TARGET_NAME} PROPERTY SUFFIX .elf)
+
+    target_include_directories(${TARGET_NAME}
+        PRIVATE
+        ${APP_INC_DIRS}
+    )
+
+    add_custom_command(
+                        OUTPUT
+                            ${LIB_INSTALLER_C}
+                        COMMAND
+                            bash --norc --noprofile
+                            ${SCRIPTS_DIR}/bt_gen_lib_installer.bash
+                            --scripts=${SCRIPTS_DIR}
+                            --out=${LIB_INSTALLER_C}
+                            $<$<BOOL:${VERBOSE}>:--verbose>
+                      )
 
     add_custom_command(
                         TARGET
-                            ${target_name}
+                            ${TARGET_NAME}
                         PRE_LINK
+                        COMMAND
+                            pwd
                         COMMAND
                             bash --norc --noprofile
                             ${SCRIPTS_DIR}/bt_pre_build.bash
                             --scripts=${SCRIPTS_DIR}
                             --defs="${LINKER_DEFINES}"
-                            --ld=$<TARGET_FILE_DIR:${target_name}>/$<TARGET_FILE_BASE_NAME:${target_name}>.ld
-                            #--ld=$<TARGET_FILE_DIR:${CMAKE_RUNTIME_OUTPUT_DIRECTORY}>/$<TARGET_FILE_BASE_NAME:${target_name}>.ld
+                            --ld=${LD_FILE}
                             --patch=${PATCH_SYMBOLS}
                             $<$<BOOL:${VERBOSE}>:--verbose>
                         WORKING_DIRECTORY
-                            ${CMAKE_CURRENT_SOURCE_DIR}
+                            ${CMAKE_CURRENT_BINARY_DIR}
                       )
 
     target_link_libraries(
-                            ${target_name}
+                            ${TARGET_NAME}
                             PRIVATE
-                                ${link_libs}
+                                ${APP_LINK_LIBS}
                             -Wl,--whole-archive
-                            infineon-base-${IFX_PLATFORM}
                             infineon-board-${IFX_BOARD}
+                            infineon-wpan-sdk
                             -Wl,--no-whole-archive
-                            -T${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${target_name}.ld
+                            -T${LD_FILE}
                             -Wl,--cref
                             -Wl,--entry=spar_crt_setup
                             -Wl,--gc-sections
                             -Wl,--just-symbols=${PATCH_SYMBOLS}
                             -Wl,--warn-common
-                            -Wl,-Map=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${target_name}.map
+                            -Wl,-Map=${MAP_FILE}
                             -nostartfiles
                          )
 
     add_custom_command(
                         TARGET
-                            ${target_name}
+                            ${TARGET_NAME}
                         POST_BUILD
                         COMMAND
+                            ${CMAKE_COMMAND} -E env PATH="$ENV{PATH}:${GCC_BIN_DIR}"
                             bash --norc --noprofile
                             ${SCRIPTS_DIR}/bt_post_build.bash
                             --scripts=${SCRIPTS_DIR}
                             --cross="arm-none-eabi-"
                             --tools=${TOOLS_DIR}
-                            --builddir=$<TARGET_FILE_DIR:${target_name}>
-                            --elfname=$<TARGET_FILE_NAME:${target_name}>
-                            --appname=${target_name}
+                            --builddir=$<TARGET_FILE_DIR:${TARGET_NAME}>
+                            --elfname=$<TARGET_FILE_NAME:${TARGET_NAME}>
+                            --appname=${RUNTIME_OUTPUT_NAME}
                             --appver=0x00000000
-                            --hdf=${BASELIB_DIR}/internal/30739A0/configdef30739A0.hdf
+                            --hdf=${BASELIB_DIR}/internal/${IFX_CHIPSET_UPPERCASE}/configdef${IFX_CHIPSET_UPPERCASE}.hdf
                             --entry=spar_crt_setup.entry
                             --cgslist="${CGS_LIST}"
                             --cgsargs="-O DLConfigBD_ADDRBase:default"
@@ -158,6 +176,6 @@ function(add_example_target target_name source_files include_dirs link_libs)
                             --extras=static_config_XIP_
                             $<$<BOOL:${VERBOSE}>:--verbose>
                         WORKING_DIRECTORY
-                            ${CMAKE_CURRENT_SOURCE_DIR}
+                            ${CMAKE_CURRENT_BINARY_DIR}
     )
 endfunction()

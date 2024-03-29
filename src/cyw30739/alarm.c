@@ -31,6 +31,7 @@
  *   This file implements the OpenThread platform abstraction for the alarm.
  */
 
+#include <openthread/platform/alarm-micro.h>
 #include <openthread/platform/alarm-milli.h>
 
 #include <slist.h>
@@ -39,7 +40,8 @@
 
 #include "system.h"
 #include <clock_timer.h>
-#include <wiced_platform.h>
+#include <spar_utils.h>
+#include <wiced_hal_platform.h>
 #include <wiced_platform_memory.h>
 #include <wiced_rtos.h>
 #include <wiced_timer.h>
@@ -59,8 +61,18 @@
 #endif // ALARM_TRIGGER_REPLACE
 
 #ifndef XTAL_ACCURACY
-#define XTAL_ACCURACY 20 // Crystal frequency accuracy: ±20ppm
+#define XTAL_ACCURACY 20 // Crystal frequency accuracy: Â±20ppm
 #endif
+
+#ifndef ALARM_CONFIG_MAX_EVENT_QUEUE_SIZE
+#define ALARM_CONFIG_MAX_EVENT_QUEUE_SIZE 10
+#endif // ALARM_CONFIG_MAX_EVENT_QUEUE_SIZE
+
+typedef enum
+{
+    ALARM_TYPE_MILLISECOND,
+    ALARM_TYPE_MICROSECOND,
+} alarm_type_t;
 
 /* Enabled timer information. */
 typedef struct alarm_timer_info
@@ -68,6 +80,7 @@ typedef struct alarm_timer_info
     slist_node_t  node;
     otInstance   *aInstance;
     wiced_timer_t timer;
+    alarm_type_t  alarm_type;
 } alarm_timer_info_t;
 
 /* Fired alarm. */
@@ -75,6 +88,7 @@ typedef struct alarm_fired
 {
     slist_node_t node;
     otInstance  *aInstance;
+    alarm_type_t alarm_type;
 } alarm_fired_t;
 
 /* Alarm module control block. */
@@ -83,8 +97,8 @@ typedef struct alarm_cb
     wiced_bool_t   initialized;
     uint32_t       event_code;
     slist_node_t   enabled_timer_list; /* Refer to alarm_timer_info_t. */
-    wiced_mutex_t *p_mutex;
-    slist_node_t   fired_alarm_list; /* Refer to alarm_fired_t. */
+    slist_node_t   fired_alarm_list;   /* Refer to alarm_fired_t. */
+    wiced_queue_t *alarm_event_queue;
 } alarm_cb_t;
 
 static alarm_cb_t alarm_cb = {0};
@@ -108,7 +122,7 @@ static wiced_bool_t alarmEnabledTimerListCheck(alarm_timer_info_t *p_target)
     return WICED_FALSE;
 }
 
-static alarm_timer_info_t *alarmEnabledTimerListAdd(otInstance *aInstance)
+static alarm_timer_info_t *alarmEnabledTimerListAdd(otInstance *aInstance, alarm_type_t alarm_type)
 {
     slist_node_t *p_node;
 
@@ -126,7 +140,8 @@ static alarm_timer_info_t *alarmEnabledTimerListAdd(otInstance *aInstance)
     slist_add_tail(p_node, &alarm_cb.enabled_timer_list);
 
     /* Store information. */
-    ((alarm_timer_info_t *)p_node)->aInstance = aInstance;
+    ((alarm_timer_info_t *)p_node)->aInstance  = aInstance;
+    ((alarm_timer_info_t *)p_node)->alarm_type = alarm_type;
 
     return (alarm_timer_info_t *)p_node;
 }
@@ -154,24 +169,26 @@ static void alarmEnabledTimerListRemove(alarm_timer_info_t *p_target)
     }
 }
 
-static void alarmTimerCallback(WICED_TIMER_PARAM_TYPE cb_params)
+/*
+ * Move the timer node from enabled timer list to fired timer list.
+ */
+static void alarmTimerListMove(alarm_timer_info_t *p_timer_info)
 {
     otInstance   *aInstance;
     slist_node_t *p_node;
-
-    wiced_rtos_lock_mutex(alarm_cb.p_mutex);
+    alarm_type_t  alarm_type;
 
     /* Check if the target entry exists in the enabled timer list. */
-    if (!alarmEnabledTimerListCheck((alarm_timer_info_t *)cb_params))
+    if (!alarmEnabledTimerListCheck(p_timer_info))
     {
-        wiced_rtos_unlock_mutex(alarm_cb.p_mutex);
         return;
     }
 
-    aInstance = ((alarm_timer_info_t *)cb_params)->aInstance;
+    aInstance  = p_timer_info->aInstance;
+    alarm_type = p_timer_info->alarm_type;
 
     /* Remove the entry from the enable timer list. */
-    alarmEnabledTimerListRemove((alarm_timer_info_t *)cb_params);
+    alarmEnabledTimerListRemove(p_timer_info);
 
     /* Add a new entry to the fired alarm list. */
     p_node = (slist_node_t *)wiced_platform_memory_allocate(sizeof(alarm_fired_t));
@@ -180,34 +197,60 @@ static void alarmTimerCallback(WICED_TIMER_PARAM_TYPE cb_params)
     {
         ALARM_TRACE("%s: Err: Cannot allocate fired alarm entry\n", __FUNCTION__);
 
-        wiced_rtos_unlock_mutex(alarm_cb.p_mutex);
         return;
     }
 
     slist_add_tail(p_node, &alarm_cb.fired_alarm_list);
 
     /* Store information. */
-    ((alarm_fired_t *)p_node)->aInstance = aInstance;
-
-    /* Set an application thread event for this fired alarm. */
-    system_event_set(alarm_cb.event_code);
-
-    wiced_rtos_unlock_mutex(alarm_cb.p_mutex);
+    ((alarm_fired_t *)p_node)->aInstance  = aInstance;
+    ((alarm_fired_t *)p_node)->alarm_type = alarm_type;
 }
 
+/*
+ * This callback is executed in the interrupt.
+ */
+__attribute__((section(".text_in_ram"))) void alarmTimerCallback(WICED_TIMER_PARAM_TYPE cb_params)
+{
+    assert(wiced_rtos_push_to_queue(alarm_cb.alarm_event_queue, &cb_params, WICED_NO_WAIT) == WICED_SUCCESS);
+    /* Set an application thread event for this fired alarm. */
+    system_event_set(alarm_cb.event_code);
+}
+
+/*
+ * This handler is executed in the application (OpenThread stack) thread.
+ */
 static void alarmTimeoutHandler(void)
 {
-    slist_node_t *p_node;
-    otInstance   *aInstance;
+    slist_node_t       *p_node;
+    otInstance         *aInstance;
+    unsigned int        flags;
+    alarm_type_t        alarm_type;
+    wiced_result_t      result;
+    uint32_t            queue_count     = 0;
+    alarm_timer_info_t *alarm_cb_params = NULL;
 
     ALARM_TRACE("%s\n", __FUNCTION__);
 
-    wiced_rtos_lock_mutex(alarm_cb.p_mutex);
+    /* Check all event queue. */
+    wiced_rtos_get_queue_occupancy(alarm_cb.alarm_event_queue, &queue_count);
+    if (queue_count != 0)
+    {
+        /* Pop one event from the event queue. */
+        result = wiced_rtos_pop_from_queue(alarm_cb.alarm_event_queue, &alarm_cb_params, WICED_NO_WAIT);
+        if (WICED_SUCCESS == result)
+        {
+            alarmTimerListMove(alarm_cb_params);
+        }
+    }
+
+    /* Disable interrupts. */
+    flags = _tx_v7m_get_and_disable_int();
 
     /* Check the fired alarm list.*/
     if (slist_count(&alarm_cb.fired_alarm_list) <= 0)
     {
-        wiced_rtos_unlock_mutex(alarm_cb.p_mutex);
+        _tx_v7m_set_int(flags);
 
         return;
     }
@@ -215,11 +258,12 @@ static void alarmTimeoutHandler(void)
     /* Get the first entry from the fired alarm list. */
     p_node = slist_get(&alarm_cb.fired_alarm_list);
 
-    aInstance = ((alarm_fired_t *)p_node)->aInstance;
+    aInstance  = ((alarm_fired_t *)p_node)->aInstance;
+    alarm_type = ((alarm_fired_t *)p_node)->alarm_type;
 
     wiced_platform_memory_free((void *)p_node);
 
-    wiced_rtos_unlock_mutex(alarm_cb.p_mutex);
+    _tx_v7m_set_int(flags);
 
     /* Signal the fired alarm. */
 #if OPENTHREAD_CONFIG_DIAG_ENABLE
@@ -230,17 +274,33 @@ static void alarmTimeoutHandler(void)
     else
 #endif /* OPENTHREAD_CONFIG_DIAG_ENABLE */
     {
-        otPlatAlarmMilliFired(aInstance);
+        if (alarm_type == ALARM_TYPE_MILLISECOND)
+        { // millisecond
+            otPlatAlarmMilliFired(aInstance);
+        }
+        else
+        { // microsecond
+            otPlatAlarmMicroFired(aInstance);
+        }
     }
 
-    /* Set an application thread event if the fired alarm list is not empty. */
-    if (slist_count(&alarm_cb.fired_alarm_list) > 0)
+    /* Set event if queue not empty */
+    wiced_rtos_get_queue_occupancy(alarm_cb.alarm_event_queue, &queue_count);
+    if (queue_count)
     {
         system_event_set(alarm_cb.event_code);
     }
+    else
+    {
+        /* Set an application thread event if the fired alarm list is not empty. */
+        if (slist_count(&alarm_cb.fired_alarm_list) > 0)
+        {
+            system_event_set(alarm_cb.event_code);
+        }
+    }
 }
 
-void otPlatAlarmMilliStartAt(otInstance *aInstance, uint32_t aT0, uint32_t aDt)
+static void alarmStartAt(alarm_type_t alarm_type, otInstance *aInstance, uint32_t aT0, uint32_t aDt)
 {
 #if ALARM_TRIGGER_REPLACE
     int i;
@@ -248,8 +308,9 @@ void otPlatAlarmMilliStartAt(otInstance *aInstance, uint32_t aT0, uint32_t aDt)
     slist_node_t *p_node;
     uint32_t      target_timeout;
     uint32_t      time_now;
+    unsigned int  flags;
 
-    ALARM_TRACE("%s (0x%p, %lu, %lu)\n", __FUNCTION__, aInstance, aT0, aDt);
+    ALARM_TRACE("%s (%d, 0x%p, %lu, %lu)\n", __FUNCTION__, alarm_type, aInstance, aT0, aDt);
 
     wiced_platform_application_thread_check();
 
@@ -265,7 +326,13 @@ void otPlatAlarmMilliStartAt(otInstance *aInstance, uint32_t aT0, uint32_t aDt)
         return;
     }
 
-    wiced_rtos_lock_mutex(alarm_cb.p_mutex);
+    if ((alarm_type != ALARM_TYPE_MILLISECOND) && (alarm_type != ALARM_TYPE_MICROSECOND))
+    {
+        return;
+    }
+
+    /* Disable interrupts. */
+    flags = _tx_v7m_get_and_disable_int();
 
 #if ALARM_TRIGGER_REPLACE
     /* Check if the entry already exists in the enabled timer list. */
@@ -273,7 +340,8 @@ void otPlatAlarmMilliStartAt(otInstance *aInstance, uint32_t aT0, uint32_t aDt)
     {
         p_node = slist_get(&alarm_cb.enabled_timer_list);
 
-        if (((alarm_timer_info_t *)p_node)->aInstance == aInstance)
+        if ((((alarm_timer_info_t *)p_node)->aInstance == aInstance) &&
+            (((alarm_timer_info_t *)p_node)->alarm_type == alarm_type))
         {
             /* Stop timer. */
             wiced_stop_timer(&(((alarm_timer_info_t *)p_node)->timer));
@@ -291,27 +359,34 @@ void otPlatAlarmMilliStartAt(otInstance *aInstance, uint32_t aT0, uint32_t aDt)
 #endif
 
     /* Add an entry to the enabled timer list and store information. */
-    p_node = (slist_node_t *)alarmEnabledTimerListAdd(aInstance);
+    p_node = (slist_node_t *)alarmEnabledTimerListAdd(aInstance, alarm_type);
 
     if (!p_node)
     {
+        _tx_v7m_set_int(flags);
         ALARM_TRACE("Err: cannot add an enabled timer entry.\n");
-        wiced_rtos_unlock_mutex(alarm_cb.p_mutex);
 
         return;
     }
 
     /* Calculate target timeout. */
-    time_now = otPlatAlarmMilliGetNow();
+    if (alarm_type == ALARM_TYPE_MILLISECOND)
+    { // millisecond
+        time_now = otPlatAlarmMilliGetNow();
+    }
+    else
+    { // microsecond
+        time_now = otPlatAlarmMicroGetNow();
+    }
 
     if (time_now >= aT0)
     { // Current time exceeds the target reference (start) time.
         if (aDt <= (time_now - aT0))
         { // Current time exceeds the target fired time.
             /* Trigger this timer immediately. */
-            wiced_rtos_unlock_mutex(alarm_cb.p_mutex);
-
-            alarmTimerCallback((WICED_TIMER_PARAM_TYPE)p_node);
+            alarmTimerListMove((alarm_timer_info_t *)p_node);
+            _tx_v7m_set_int(flags);
+            system_event_set(alarm_cb.event_code);
 
             return;
         }
@@ -321,37 +396,82 @@ void otPlatAlarmMilliStartAt(otInstance *aInstance, uint32_t aT0, uint32_t aDt)
         }
     }
     else
-    {
-        target_timeout = aDt + (aT0 - time_now);
+    { // overflow, timer is wrapped
+        if ((aT0 + aDt) >= aT0)
+        { // Current time exceeds the target fired time.
+            /* Trigger this timer immediately. */
+            alarmTimerListMove((alarm_timer_info_t *)p_node);
+            _tx_v7m_set_int(flags);
+            system_event_set(alarm_cb.event_code);
+
+            return;
+        }
+        else
+        {
+            if ((aT0 + aDt) <= time_now)
+            { // Current time exceeds the target fired time.
+                /* Trigger this timer immediately. */
+                alarmTimerListMove((alarm_timer_info_t *)p_node);
+                _tx_v7m_set_int(flags);
+                system_event_set(alarm_cb.event_code);
+
+                return;
+            }
+            else
+            {
+                target_timeout = aT0 + aDt - time_now;
+            }
+        }
     }
 
     /* Initialize the timer module. */
-    wiced_init_timer(&(((alarm_timer_info_t *)p_node)->timer), alarmTimerCallback, (WICED_TIMER_PARAM_TYPE)p_node,
-                     WICED_MILLI_SECONDS_TIMER);
+    if (alarm_type == ALARM_TYPE_MILLISECOND)
+    { // millisecond
+        wiced_init_timer(&(((alarm_timer_info_t *)p_node)->timer), alarmTimerCallback, (WICED_TIMER_PARAM_TYPE)p_node,
+                         WICED_MILLI_SECONDS_TIMER_INTERRUPT);
+    }
+    else
+    { // microsecond
+        wiced_init_timer(&(((alarm_timer_info_t *)p_node)->timer), alarmTimerCallback, (WICED_TIMER_PARAM_TYPE)p_node,
+                         WICED_MICRO_SECONDS_TIMER_INTERRUPT);
+    }
 
     /* Start timer. */
     wiced_start_timer(&(((alarm_timer_info_t *)p_node)->timer), target_timeout);
 
-    wiced_rtos_unlock_mutex(alarm_cb.p_mutex);
+    _tx_v7m_set_int(flags);
 }
 
-void otPlatAlarmMilliStop(otInstance *aInstance)
+void otPlatAlarmMilliStartAt(otInstance *aInstance, uint32_t aT0, uint32_t aDt)
+{
+    alarmStartAt(ALARM_TYPE_MILLISECOND, aInstance, aT0, aDt);
+}
+
+void otPlatAlarmMicroStartAt(otInstance *aInstance, uint32_t aT0, uint32_t aDt)
+{
+    alarmStartAt(ALARM_TYPE_MICROSECOND, aInstance, aT0, aDt);
+}
+
+static void alarmStop(alarm_type_t alarm_type, otInstance *aInstance)
 {
     int           i;
     slist_node_t *p_node;
+    unsigned int  flags;
 
-    ALARM_TRACE("%s (%p)\n", __FUNCTION__, aInstance);
+    ALARM_TRACE("%s (%u, %p)\n", __FUNCTION__, alarm_type, aInstance);
 
     wiced_platform_application_thread_check();
 
-    wiced_rtos_lock_mutex(alarm_cb.p_mutex);
+    /* Disable interrupts. */
+    flags = _tx_v7m_get_and_disable_int();
 
     /* Find the target alarm. */
     for (i = 0; i < slist_count(&alarm_cb.enabled_timer_list); i++)
     {
         p_node = slist_get(&alarm_cb.enabled_timer_list);
 
-        if (((alarm_timer_info_t *)p_node)->aInstance == aInstance)
+        if ((((alarm_timer_info_t *)p_node)->aInstance == aInstance) &&
+            (((alarm_timer_info_t *)p_node)->alarm_type == alarm_type))
         {
             /* Stop timer. */
             wiced_stop_timer(&(((alarm_timer_info_t *)p_node)->timer));
@@ -365,8 +485,12 @@ void otPlatAlarmMilliStop(otInstance *aInstance)
         }
     }
 
-    wiced_rtos_unlock_mutex(alarm_cb.p_mutex);
+    _tx_v7m_set_int(flags);
 }
+
+void otPlatAlarmMilliStop(otInstance *aInstance) { alarmStop(ALARM_TYPE_MILLISECOND, aInstance); }
+
+void otPlatAlarmMicroStop(otInstance *aInstance) { alarmStop(ALARM_TYPE_MICROSECOND, aInstance); }
 
 uint32_t otPlatAlarmMilliGetNow(void) { return (uint32_t)(clock_SystemTimeMicroseconds64() / 1000); }
 
@@ -386,27 +510,25 @@ void otPlatAlramInit(void)
         return;
     }
 
-    /* Create mutex. */
-    alarm_cb.p_mutex = wiced_rtos_create_mutex();
-
-    if (alarm_cb.p_mutex == NULL)
-    {
-        ALARM_TRACE("%s: Fail to create mutex.\n", __FUNCTION__);
-        return;
-    }
-
-    /* Initialize the mutex. */
-    if (wiced_rtos_init_mutex(alarm_cb.p_mutex) != WICED_SUCCESS)
-    {
-        ALARM_TRACE("%s: Fail to init. mutex.\n", __FUNCTION__);
-        return;
-    }
-
     /* Initialize the enabled timer list. */
     INIT_SLIST_NODE(&alarm_cb.enabled_timer_list);
 
     /* Initialize the fired alarm list. */
     INIT_SLIST_NODE(&alarm_cb.fired_alarm_list);
+
+    /* Initialize the queue. */
+    alarm_cb.alarm_event_queue = wiced_rtos_create_queue();
+    if (!alarm_cb.alarm_event_queue)
+    {
+        ALARM_TRACE("%s: Fail to create event queue.\n", __FUNCTION__);
+    }
+
+    wiced_result_t result = wiced_rtos_init_queue(alarm_cb.alarm_event_queue, "AlarmTimerEventQueue",
+                                                  sizeof(alarm_timer_info_t *), ALARM_CONFIG_MAX_EVENT_QUEUE_SIZE);
+    if (result != WICED_SUCCESS)
+    {
+        ALARM_TRACE("%s: Fail to init event queue.\n", __FUNCTION__);
+    }
 
     alarm_cb.initialized = WICED_TRUE;
 }

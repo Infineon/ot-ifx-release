@@ -28,3 +28,5 @@
 
 # Add platform and board information
 add_subdirectory(platform/${IFX_PLATFORM})
+
+include(wpan-sdk.cmake)

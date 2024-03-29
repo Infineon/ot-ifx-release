@@ -30,15 +30,22 @@ set(CMAKE_SYSTEM_NAME              Generic)
 set(CMAKE_SYSTEM_PROCESSOR         ARM)
 set(CMAKE_TRY_COMPILE_TARGET_TYPE  STATIC_LIBRARY)
 
-file(GLOB TOOLS_DIR $ENV{HOME}/ModusToolbox/tools_*/gcc/bin)
-if(TOOLS_DIR)
-    set(TOOLS_DIR ${TOOLS_DIR}/)
+if (EXISTS $ENV{CY_TOOLS_PATHS})
+    set(MTB_TOOLS_DIR $ENV{CY_TOOLS_PATHS})
+else()
+    file(GLOB MTB_TOOLS_DIR $ENV{HOME}/ModusToolbox/tools_*)
 endif()
 
-set(CMAKE_C_COMPILER               ${TOOLS_DIR}arm-none-eabi-gcc)
-set(CMAKE_CXX_COMPILER             ${TOOLS_DIR}arm-none-eabi-g++)
-set(CMAKE_ASM_COMPILER             ${TOOLS_DIR}arm-none-eabi-as)
-set(CMAKE_RANLIB                   ${TOOLS_DIR}arm-none-eabi-ranlib)
+if (NOT EXISTS ${MTB_TOOLS_DIR})
+    message(FATAL_ERROR "Unable to find available ModusToolbox tool path. (CY_TOOLS_PATHS)")
+endif()
+
+set(GCC_BIN_DIR ${MTB_TOOLS_DIR}/gcc/bin)
+
+set(CMAKE_C_COMPILER               ${GCC_BIN_DIR}/arm-none-eabi-gcc)
+set(CMAKE_CXX_COMPILER             ${GCC_BIN_DIR}/arm-none-eabi-g++)
+set(CMAKE_ASM_COMPILER             ${GCC_BIN_DIR}/arm-none-eabi-as)
+set(CMAKE_RANLIB                   ${GCC_BIN_DIR}/arm-none-eabi-ranlib)
 
 execute_process(COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE COMPILER_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
 

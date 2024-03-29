@@ -27,12 +27,35 @@
 #  POSSIBILITY OF SUCH DAMAGE.
 #
 
+# Keep folder information
+if [[ -n ${BASH_SOURCE[0]} ]]; then
+    script_path="${BASH_SOURCE[0]}"
+else
+    script_path="$0"
+fi
+
+script_dir="$(dirname "$(realpath "$script_path")")"
+repo_dir="$(dirname "$script_dir")"
+
+source "$script_dir"/common_utility
+
+print_usage()
+{
+    echo "Usage: $0 [-h] [-v] -p <serial port> -b <board> -d <device type> -a <target application>"
+    echo "       -h : help"
+    echo "       -v : verbose"
+    echo "       -p : target serial port"
+    echo "       -b : target board"
+    echo "       -d : target device type, this field is invalid if target application is set to rcp"
+    echo "            Currently, target device type could be ftd or mtd"
+    echo "       -a : target application"
+    echo "            Currently, target application could be cli, ncp, or rcp"
+}
+
 main()
 {
-    local USAGE="Usage: $0 [-h] [-v] -p <serial port> -b <board> -d <device_type: ftd, mtd>"
-
     # Parse input parameters
-    while getopts "p:b:d:hv" optchar; do
+    while getopts "p:b:d:a:hv" optchar; do
         case "${optchar}" in
             p)
                 local PORT="${OPTARG}"
@@ -42,33 +65,84 @@ main()
                 echo "BOARD: $BOARD"
                 ;;
             d)
-                local TARGET="infineon-ot-cli-${OPTARG}"
+                local TARGET="${OPTARG}"
                 echo "TARGET: $TARGET"
                 ;;
             v)
                 local VERBOSE=--verbose
                 ;;
+            a)
+                local APP="${OPTARG}"
+                ;;
             *)
-                echo "${USAGE}"
+                print_usage
                 exit 2
                 ;;
         esac
     done
     shift $((OPTIND - 1))
 
-    if [ ! -v PORT ] || [ ! -v BOARD ] || [ ! -v TARGET ]; then
-        echo "${USAGE}"
+    # Check parameters
+    if [ ! -v PORT ] || [ ! -v BOARD ] || [ ! -v APP ]; then
+        print_usage
         exit 2
     fi
 
-    # Parse the platform
-    board_leading_substring="cyw9"
-    IFX_PLATFORM="cyw${BOARD:${#board_leading_substring}:5}"
+    if [ "$APP" != "rcp" ]; then
+        if [ ! -v TARGET ]; then
+            print_usage
+            exit 2
+        fi
+    fi
 
-    echo "IFX_PLATFORM: $IFX_PLATFORM"
+    # Find available platforms
+    declare -a ifx_platform=()
+    platform_dir="$(pwd)"/third_party/infineon/platform
+    available_platforms_load ifx_platform "$platform_dir"
+
+    # Find target platform
+    local target_platform=''
+    local platform_found=0
+    for target_platform in "${ifx_platform[@]}"; do
+        if [[ $BOARD == *"$target_platform"* ]]; then
+            platform_found=1
+            break
+        fi
+    done
+
+    if [[ ${platform_found} == 0 ]]; then
+        # special case handling
+        # Use a loop to iterate through each character in the string
+        for ((i = 0; i < ${#BOARD}; i++)); do
+            char=${BOARD:i:1} # Get the character at index i
+
+            # Check if the character is a number
+            if [[ $char =~ ^[0-9]$ ]]; then
+                break
+            fi
+        done
+
+        local platform_leading_substring=${BOARD:0:i}
+
+        # Find target platform with the same leading substring
+        for target_platform in "${ifx_platform[@]}"; do
+            if [[ $platform_leading_substring == "${target_platform:0:i}" ]]; then
+                if [[ $BOARD == *"${target_platform:i}"* ]]; then
+                    platform_found=1
+                    break
+                fi
+            fi
+        done
+    fi
+
+    if [[ ${platform_found} == 0 ]]; then
+        exit 1
+    fi
+
+    echo "Target Platform: $target_platform"
 
     # Set target script path
-    local IFX_SCRIPTS_DIR="$repo_dir/third_party/infineon/platform/$IFX_PLATFORM/scripts"
+    local IFX_SCRIPTS_DIR="$repo_dir/third_party/infineon/platform/$target_platform/scripts"
 
     echo "IFX_SCRIPTS_DIR: $IFX_SCRIPTS_DIR"
 
@@ -91,16 +165,24 @@ main()
     fi
 
     set +u
+
+    if [ "$APP" == "rcp" ]; then
+        local TARGET_APP_DIR="${OT_BUILDDIR}/${BOARD}/${APP}/bin"
+    else
+        local TARGET_APP_DIR="${OT_BUILDDIR}/${BOARD}/${APP}/bin/${TARGET}"
+    fi
+
     bash --norc --noprofile \
         "${IFX_SCRIPTS_DIR}/bt_program.bash" \
         --shell="${IFX_MTB_TOOLS_DIR}/modus-shell" \
         --tools="${SDK_TOOLS_DIR}/${SDK_TOOLS_SUB_DIR}" \
         --scripts="${IFX_SCRIPTS_DIR}" \
-        --hex="${OT_BUILDDIR}/${BOARD}/bin/${TARGET}_download.hex" \
-        --elf="${OT_BUILDDIR}/${BOARD}/bin/${TARGET}.elf" \
+        --hex="${TARGET_APP_DIR}/${APP}_download.hex" \
+        --elf="${TARGET_APP_DIR}/${APP}.elf" \
         --uart="${PORT}" \
         --direct=0 \
-        ${VERBOSE:-}
+        ${VERBOSE-}
+
     set -u
 }
 
@@ -111,16 +193,6 @@ main()
 ###################################################################################################
 
 set -euo pipefail
-
-# Keep folder information
-if [[ -n ${BASH_SOURCE[0]} ]]; then
-    script_path="${BASH_SOURCE[0]}"
-else
-    script_path="$0"
-fi
-
-script_dir="$(dirname "$(realpath "$script_path")")"
-repo_dir="$(dirname "$script_dir")"
 
 if [[ $OSTYPE == "cygwin" ]]; then
     OT_BUILDDIR=$(cygpath -m "${OT_CMAKE_BUILD_DIR:-$repo_dir/build}")
