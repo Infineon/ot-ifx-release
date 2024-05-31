@@ -96,13 +96,13 @@ build_cli_uart()
         "-DOT_RCP=OFF"
         "-DOT_SLAAC=ON"
         "-DOT_SRP_CLIENT=ON"
-        "-DOT_THREAD_VERSION=1.2"
+        "-DOT_THREAD_VERSION=1.3.1"
     )
 
     options+=("-DCMAKE_TOOLCHAIN_FILE=src/${target_platform}/arm-none-eabi.cmake")
 
-    cmake -GNinja "$@" -S "${repo_dir}" -B "${builddir}" "${options[@]}"
-    cmake --build "${builddir}"
+    cmake -GNinja -S "${repo_dir}" -B "${builddir}" "$@" "${options[@]}"
+    cmake --build "${builddir}" --target "${OT_CMAKE_NINJA_TARGET[@]}"
 }
 
 build_ncp_uart()
@@ -139,13 +139,13 @@ build_ncp_uart()
         "-DOT_RCP=OFF"
         "-DOT_SLAAC=ON"
         "-DOT_SRP_CLIENT=ON"
-        "-DOT_THREAD_VERSION=1.2"
+        "-DOT_THREAD_VERSION=1.3.1"
     )
 
     options+=("-DCMAKE_TOOLCHAIN_FILE=src/${target_platform}/arm-none-eabi.cmake")
 
-    cmake -GNinja "$@" -S "${repo_dir}" -B "${builddir}" "${options[@]}"
-    cmake --build "${builddir}"
+    cmake -GNinja -S "${repo_dir}" -B "${builddir}" "$@" "${options[@]}"
+    cmake --build "${builddir}" --target "${OT_CMAKE_NINJA_TARGET[@]}"
 }
 
 # Utility to build OpenThread RCP
@@ -169,13 +169,13 @@ build_rcp_uart()
         "-DOT_MTD=OFF"
         "-DOT_PLATFORM=external"
         "-DOT_RCP=ON"
-        "-DOT_THREAD_VERSION=1.2"
+        "-DOT_THREAD_VERSION=1.3.1"
     )
 
     options+=("-DCMAKE_TOOLCHAIN_FILE=src/${target_platform}/arm-none-eabi.cmake")
 
-    cmake -GNinja "$@" -S "${repo_dir}" -B "${builddir}" "${options[@]}"
-    cmake --build "${builddir}"
+    cmake -GNinja -S "${repo_dir}" -B "${builddir}" "$@" "${options[@]}"
+    cmake --build "${builddir}" --target "${OT_CMAKE_NINJA_TARGET[@]}"
 }
 
 main()
@@ -203,11 +203,17 @@ main()
     echo "User specified build options: ${cmdline_options[*]}"
     echo "General options: ${options[*]}}"
     if [ "$target_app" == "cli" ]; then
-        build_cli_uart "$target_board" "$target_app" -DOT_BUILD_EXECUTABLES=OFF -DIFX_PLATFORM="$target_platform" -DIFX_CHIPSET="$target_chipset" -DIFX_BOARD="$target_board" "${cmdline_options[@]}"
+        read -r -a OT_CMAKE_NINJA_TARGET < <(echo "${OT_CMAKE_NINJA_TARGET:-cli-ftd cli-mtd}")
+        build_cli_uart "$target_board" -DOT_BUILD_EXECUTABLES=OFF -DIFX_PLATFORM="$target_platform" -DIFX_CHIPSET="$target_chipset" -DIFX_BOARD="$target_board" "${cmdline_options[@]}"
+        unset OT_CMAKE_NINJA_TARGET
     elif [ "$target_app" == "ncp" ]; then
-        build_ncp_uart "$target_board" "$target_app" -DOT_BUILD_EXECUTABLES=OFF -DIFX_PLATFORM="$target_platform" -DIFX_CHIPSET="$target_chipset" -DIFX_BOARD="$target_board" "${cmdline_options[@]}"
+        read -r -a OT_CMAKE_NINJA_TARGET < <(echo "${OT_CMAKE_NINJA_TARGET:-ncp-ftd ncp-mtd}")
+        build_ncp_uart "$target_board" -DOT_BUILD_EXECUTABLES=OFF -DIFX_PLATFORM="$target_platform" -DIFX_CHIPSET="$target_chipset" -DIFX_BOARD="$target_board" "${cmdline_options[@]}"
+        unset OT_CMAKE_NINJA_TARGET
     elif [ "$target_app" == "rcp" ]; then
-        build_rcp_uart "$target_board" "$target_app" -DOT_BUILD_EXECUTABLES=OFF -DIFX_PLATFORM="$target_platform" -DIFX_CHIPSET="$target_chipset" -DIFX_BOARD="$target_board" "${cmdline_options[@]}"
+        read -r -a OT_CMAKE_NINJA_TARGET < <(echo "${OT_CMAKE_NINJA_TARGET:-rcp}")
+        build_rcp_uart "$target_board" -DOT_BUILD_EXECUTABLES=OFF -DIFX_PLATFORM="$target_platform" -DIFX_CHIPSET="$target_chipset" -DIFX_BOARD="$target_board" "${cmdline_options[@]}"
+        unset OT_CMAKE_NINJA_TARGET
     fi
 }
 
